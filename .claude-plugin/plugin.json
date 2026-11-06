@@ -1,7 +1,7 @@
 {
   "name": "gitree",
-  "version": "0.3.0",
-  "description": "Pannello con repo, branch e stato dei repository git annidati nella cartella della sessione, con fetch, pull, push e confronto grafico delle modifiche in stile EGit",
+  "version": "0.4.0",
+  "description": "Pane with repo, branch and status of the git repositories nested in the session folder, with fetch, pull, push and an EGit-style graphical diff",
   "author": {
     "name": "RCP Vision",
     "email": "info@rcp-vision.com",

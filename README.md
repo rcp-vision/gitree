@@ -1,67 +1,68 @@
 # gitree
 
-`gitree` è un plugin di [Claude Code](https://docs.claude.com/en/docs/claude-code) che mostra, accanto alla chat, lo
-stato di tutti i repository git annidati nella cartella della sessione.
+`gitree` is a [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin that shows, next to the chat, the
+status of all the git repositories nested in the session folder.
 
-L'interfaccia è in italiano.
+## What it shows
 
-## Cosa mostra
+The **Repositories** pane lists one repository per row, with four columns:
 
-Il pannello **Repositories** elenca un repository per riga, con tre colonne:
-
-| Colonna | Contenuto |
+| Column | Content |
 |---|---|
-| **Repo** | Il percorso del repository, a partire dalla cartella che li contiene tutti. |
-| **Branch** | Il branch corrente. |
-| **Stato** | I pulsanti dei confronti e lo stato rispetto al remote. |
+| **Repo** | The repository path, starting from the folder that contains all of them. |
+| **Branch** | The current branch. |
+| **Status** | The comparison buttons and the status relative to the remote. |
+| **Actions** | **Fetch**, plus **Pull** and **Push** when they apply. |
 
-Nella colonna **Stato** compaiono solo i pulsanti che servono:
+The **Status** column shows only the buttons that apply:
 
-- **Unstaged N** apre il confronto fra l'indice e la copia di lavoro, file non tracciati compresi.
-- **Staged N** apre il confronto fra `HEAD` e l'indice.
-- **Da pushare N** apre il confronto fra il punto di partenza dall'upstream e `HEAD`, con l'elenco dei commit.
+- **Unstaged N** opens the comparison between the index and the working tree, untracked files included.
+- **Staged N** opens the comparison between `HEAD` and the index.
+- **Unpushed N** opens the comparison between the point where the branch left the upstream and `HEAD`, with the list
+  of commits.
 
-Accanto ai pulsanti compaiono «senza upstream», «N da pullare» oppure «pulito».
+Next to the buttons, the column shows "no upstream", "N to pull", or "clean".
 
-I pulsanti **Fetch**, **Pull** e **Push** eseguono l'azione git sul singolo repository. **Aggiorna** esegue il fetch su
-tutti i repository. I repository in lavorazione stanno in cima all'elenco.
+The **Fetch**, **Pull**, and **Push** buttons run the git action on a single repository. **Refresh** runs fetch on all
+repositories. Repositories in progress stay at the top of the list.
 
-Sul desktop il confronto è grafico, in stile Compare Editor di EGit: due lati affiancati, connettori fra i blocchi
-cambiati e barre di scorrimento. Sul terminale il confronto mostra le righe cambiate con il contesto.
+On the desktop the comparison is graphical, in the style of the EGit Compare Editor: two sides next to each other,
+connectors between the changed blocks, and scroll bars. On the terminal the comparison shows the changed lines with
+their context.
 
-## Installazione
+## Installation
 
-In Claude Code, aggiungi il marketplace e installa il plugin:
+In Claude Code, add the marketplace and install the plugin:
 
 ```text
 /plugin marketplace add rcp-vision/gitree
 /plugin install gitree@rcp-vision
 ```
 
-Il pannello si apre all'avvio di ogni sessione. Se lo chiudi, lo riapri con `/gitree`.
+The pane opens at the start of every session. If you close it, reopen it with `/gitree`.
 
-## Comportamento
+## Behaviour
 
-- Il plugin cerca i repository nella cartella della sessione fino a 8 livelli di profondità. Salta `node_modules`,
-  `.claude`, `.direnv`, `.gradle`, `.venv` e `venv`.
-- Lo stato si rilegge ogni 30 secondi, senza fetch. «Da pushare» e «da pullare» si riferiscono all'ultimo fetch.
-- Su Linux e macOS fetch, pull e push condividono una connessione SSH per host per 2 minuti, così la passphrase della
-  chiave si chiede una volta per host.
-- Su Windows i repository si cercano leggendo le cartelle, e un repository trovato non si esplora oltre. Git usa il
-  suo ambiente SSH normale.
+- The plugin searches the session folder for repositories up to 8 levels deep. It skips `node_modules`, `.claude`,
+  `.direnv`, `.gradle`, `.venv`, and `venv`.
+- The status is read again every 30 seconds, without fetching. "Unpushed" and "to pull" refer to the last fetch.
+- On Linux and macOS, fetch, pull, and push share one SSH connection per host for 2 minutes, so the key passphrase is
+  asked once per host.
+- On Windows the plugin finds repositories by reading folders, and does not explore a repository it has found. Git
+  uses its usual SSH environment.
 
-## Sviluppo
+## Development
 
-Il codice sta in `hooks/register.tsx` (pannelli e comandi) e `hooks/compare.tsx` (confronto grafico sul desktop). I
-tipi dello stato sono in `types/index.d.ts`.
+The code is in `hooks/register.tsx` (panes and commands) and `hooks/compare.tsx` (graphical comparison on the
+desktop). The state types are in `types/index.d.ts`.
 
-Se vuoi provare una modifica, avvia Claude Code con la cartella del plugin:
+If you want to try a change, start Claude Code with the plugin folder:
 
 ```bash
-claude --plugin-dir /PERCORSO/DI/gitree
+claude --plugin-dir /PATH/TO/gitree
 ```
 
-Al primo caricamento Claude Code genera i tipi in `.claude-plugin/types/`. Dopo puoi eseguire i controlli:
+On the first load Claude Code generates the types in `.claude-plugin/types/`. Then you can run the checks:
 
 ```bash
 claude plugin validate .
@@ -75,6 +76,6 @@ claude plugin test .
 npx -p typescript@5 tsc -p .
 ```
 
-## Licenza
+## License
 
 [MIT](LICENSE).

@@ -1,50 +1,50 @@
-// Confronto grafico in stile Compare Editor di EGit, disegnato da un `Client` sul desktop:
-// il lato vecchio a sinistra, il nuovo a destra, una sola finestra di righe per i due lati (lo
-// scorrimento è sincronizzato per costruzione), connettori al centro e righello a destra.
+// Graphical comparison in the style of the EGit Compare Editor, drawn by a `Client` on the desktop:
+// the old side on the left, the new one on the right, a single window of rows for both sides
+// (scrolling is synchronized by construction), connectors in the middle and a ruler on the right.
 import type { ClientModule } from 'claude-code'
 
 import type { CompareProps } from '../types'
 
 type Kind = 'same' | 'mod' | 'del' | 'add'
 
-/** Una riga allineata: indice nel file di sinistra e di destra (null = riga di riempimento). */
+/** An aligned row: index in the left and right file (null = filler row). */
 type Row = { l: number | null; r: number | null; kind: Kind; block: number }
 
 type Segment = { text: string; isChanged: boolean }
 
-/** Lo stato locale dell'istanza: `key` cambia col file o con una rilettura e riporta la vista al primo blocco. */
+/** The instance's local state: `key` changes with the file or a reload and brings the view back to the first block. */
 type View = { key: string; offset: number; col: number; wheelSeq: number; drag: Drag | null }
 
-/** Un cursore afferrato: quale barra, e a quante celle dal suo inizio lo si tiene. */
+/** A grabbed thumb: which bar, and how many cells from its start it is held. */
 type Drag = { bar: 'vertical' | 'horizontal'; grab: number }
 
-// A destra del confronto: la colonna dei segni dei blocchi, poi la barra verticale
+// Right of the comparison: the block marks column, then the vertical bar
 const MARKS_WIDTH = 3
 const BAR_WIDTH = 2
 const RULER = MARKS_WIDTH + BAR_WIDTH
-// Il cursore della barra verticale non scende sotto queste righe, per restare da afferrare
+// The vertical bar thumb never gets shorter than these rows, so it stays easy to grab
 const VERTICAL_THUMB_MIN = 2
 const CENTER = 3
 const WHEEL_ROWS = 3
 const SHIFT_COLUMNS = 8
-// Il minimo di righe che il pannello assegna al confronto (COMPARE_MIN_ROWS in register.tsx)
+// The minimum rows the pane assigns to the comparison (COMPARE_MIN_ROWS in register.tsx)
 const MIN_TRUSTED_ROWS = 12
-// Oltre questo prodotto di parole la riga appaiata si evidenzia tutta: il confronto parola per parola costa troppo
+// Past this word product the paired line is highlighted whole: the word-by-word comparison costs too much
 const WORD_DIFF_MAX = 40_000
-// Sfondi pastello semitrasparenti, come nel pannello Repositories: reggono il tema chiaro e quello scuro
+// Semi-transparent pastel backgrounds, as in the Repositories pane: they work with the light and the dark theme
 const HEADER_BACKGROUND = 'rgba(160, 180, 230, 0.16)'
 const REMOVED_BACKGROUND = 'rgba(240, 160, 160, 0.22)'
 const ADDED_BACKGROUND = 'rgba(140, 210, 160, 0.22)'
-// Le parole cambiate dentro una riga appaiata: lo stesso tono, un po' più intenso
+// Changed words inside a paired line: the same tone, a little stronger
 const REMOVED_WORD_BACKGROUND = 'rgba(240, 140, 140, 0.45)'
 const ADDED_WORD_BACKGROUND = 'rgba(120, 200, 140, 0.45)'
 const FILLER_BACKGROUND = 'rgba(160, 180, 230, 0.06)'
 const CONNECTOR_BACKGROUND = 'rgba(160, 180, 230, 0.12)'
-// Le barre di scorrimento: traccia tenue, cursore pieno più intenso. Anche senza colore: in verticale il cursore
-// porta il segno di presa ≡ e la traccia è vuota, in tutte e due le barre
+// The scroll bars: faint track, solid stronger thumb. Also without color: the thumb carries the grip mark ≡
+// and the track is empty, in both bars
 const TRACK_BACKGROUND = 'rgba(160, 180, 230, 0.10)'
 const THUMB_BACKGROUND = 'rgba(160, 180, 230, 0.35)'
-// Ogni colore ha il suo segno: tolte, aggiunte e cambiate si distinguono anche senza colori
+// Every color has its mark: removed, added and changed lines are told apart even without colors
 const MARK: Record<Kind, string> = { same: ' ', mod: '≠', del: '−', add: '+' }
 const MARK_COLOR = { same: undefined, mod: 'warning', del: 'error', add: 'success' } as const
 
@@ -84,7 +84,7 @@ function tokens(text: string): string[] {
   return text.match(/[\p{L}\p{N}_]+|\s+|[^\p{L}\p{N}_\s]/gu) ?? []
 }
 
-// Le parole cambiate fra due righe appaiate: prefisso e suffisso comuni tolti, LCS sul resto
+// The words changed between two paired lines: common prefix and suffix removed, LCS on the rest
 function wordDiff(before: string, after: string): [Segment[], Segment[]] {
   const a = tokens(before)
   const b = tokens(after)
@@ -142,7 +142,7 @@ function wordDiff(before: string, after: string): [Segment[], Segment[]] {
   return [segments(a, keptA), segments(b, keptB)]
 }
 
-// La parte di riga visibile con lo scorrimento orizzontale, segmenti compresi
+// The part of the line visible with horizontal scrolling, segments included
 function clip(segments: Segment[], from: number, width: number): Segment[] {
   const out: Segment[] = []
   let position = 0
@@ -163,15 +163,15 @@ function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), high)
 }
 
-// Il cursore di una barra lunga `track` celle: tanto lungo quanto la parte in vista (`shown` di `total`),
-// all'inizio quando la vista è in cima, alla fine quando è in fondo
+// The thumb of a bar `track` cells long: as long as the part in view (`shown` of `total`),
+// at the start when the view is at the top, at the end when it is at the bottom
 function thumb(track: number, shown: number, total: number, position: number, maxPosition: number, minSize = 1) {
   const size = total <= shown ? track : clamp(Math.round((track * shown) / total), Math.min(minSize, track), track)
   const start = maxPosition === 0 ? 0 : Math.round((position / maxPosition) * (track - size))
   return { start, size }
 }
 
-// La posizione della vista che mette l'inizio del cursore nella cella `start` della traccia
+// The view position that puts the start of the thumb in track cell `start`
 function positionFor(start: number, track: number, size: number, maxPosition: number): number {
   return track === size ? 0 : Math.round((clamp(start, 0, track - size) / (track - size)) * maxPosition)
 }
@@ -183,15 +183,15 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
   const numberWidth = String(Math.max(props.leftTotal, props.rightTotal, 1)).length + 1
   const sideWidth = Math.max(10, Math.floor((columns - RULER - CENTER) / 2))
   const textWidth = Math.max(1, sideWidth - numberWidth - 1)
-  // La barra orizzontale c'è solo se almeno una riga è più larga della sua colonna
+  // The horizontal bar exists only if at least one line is wider than its column
   const longest = Math.max(0, ...props.left.map(line => line.length), ...props.right.map(line => line.length))
   const maxCol = Math.max(0, longest - textWidth)
   const hasHorizontalBar = maxCol > 0
-  // Sul desktop la regione può riportare l'altezza di quanto ha già disegnato, non quella assegnata, e il confronto
-  // si restringe a ogni disegno fino a tre righe. Il pannello non assegna mai meno di MIN_TRUSTED_ROWS: sotto,
-  // vale l'altezza assegnata (`viewRows`)
+  // On the desktop the region can report the height of what it already drew, not the assigned one, and the comparison
+  // shrinks on every draw down to three rows. The pane never assigns less than MIN_TRUSTED_ROWS: below that,
+  // the assigned height (`viewRows`) applies
   const totalRows = surface.rows >= MIN_TRUSTED_ROWS ? surface.rows : props.viewRows > 0 ? props.viewRows : 30
-  // Intestazione, riga di stato e, se serve, barra orizzontale
+  // Header, status line and, if needed, horizontal bar
   const bodyRows = Math.max(3, totalRows - 2 - (hasHorizontalBar ? 1 : 0))
   const maxOffset = Math.max(0, rows.length - bodyRows)
   const trackWidth = sideWidth * 2 + CENTER
@@ -199,7 +199,7 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
 
   let view = surface.state
   if (view === undefined || view.key !== key) {
-    // Non limitata qui: la regione può ancora cambiare altezza, il limite si applica al disegno
+    // Not clamped here: the region can still change height, the clamp applies when drawing
     const first = blockStarts[0] ?? 0
     view = { key, offset: Math.max(0, first - 3), col: 0, wheelSeq: props.wheel.seq, drag: null }
     surface.setState(view)
@@ -208,7 +208,7 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     surface.setState(view)
   }
 
-  // Più gesti prima del ridisegno si sommano: ognuno parte dall'ultimo stato chiesto
+  // Several gestures before the redraw add up: each starts from the last requested state
   let latest = view
   const change = (next: Partial<View>) => {
     latest = { ...latest, ...next }
@@ -225,10 +225,10 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     if (target !== undefined) change({ offset: target - 3 })
   }
 
-  // I cursori delle due barre: lunghi quanto la parte in vista, nella posizione della vista
+  // The thumbs of the two bars: as long as the part in view, at the view position
   const verticalThumb = thumb(bodyRows, bodyRows, rows.length, clamp(latest.offset, 0, maxOffset), maxOffset, VERTICAL_THUMB_MIN)
   const horizontalThumb = thumb(trackWidth, textWidth, longest, clamp(latest.col, 0, maxCol), maxCol)
-  // Porta l'inizio del cursore in `start`, misurato in celle della traccia
+  // Moves the start of the thumb to `start`, measured in track cells
   const moveVertical = (start: number) => change({ offset: positionFor(start, bodyRows, verticalThumb.size, maxOffset) })
   const moveHorizontal = (start: number) => change({ col: positionFor(start, trackWidth, horizontalThumb.size, maxCol) })
 
@@ -246,8 +246,8 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     else if (event.key === 'p') nextBlock(-1)
   })
 
-  // Un clic sul cursore lo afferra dove lo si prende; un clic sulla traccia vi centra il cursore e lo afferra
-  // al centro. Il trascinamento sposta il cursore, e con lui la vista, finché il pulsante non si rilascia
+  // A click on the thumb grabs it where it is taken; a click on the track centers the thumb there and grabs it
+  // in the middle. Dragging moves the thumb, and the view with it, until the button is released
   const horizontalRow = 1 + bodyRows
   surface.onPointer(event => {
     const drag = latest.drag ?? null
@@ -324,7 +324,7 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     )
   }
 
-  // Il connettore centrale: lega i due lati di un blocco, con il segno del cambiamento
+  // The center connector: it links the two sides of a block, with the change mark
   const connector = (row: Row, rowIndex: number) => {
     const isBlockStart = row.kind !== 'same' && blockStarts[row.block] === rowIndex
     return (
@@ -336,9 +336,9 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     )
   }
 
-  // A destra di ogni riga il segno dei blocchi in quella fetta del file
+  // Right of each row, the mark of the blocks in that slice of the file
   const marks = (y: number) => {
-    // Un file più corto della finestra si riassume riga per riga, allineato alle righe accanto
+    // A file shorter than the window is summarized row by row, aligned with the rows next to it
     const isShort = rows.length <= bodyRows
     const from = isShort ? y : Math.floor((y * rows.length) / bodyRows)
     const to = isShort ? y + 1 : Math.max(from + 1, Math.floor(((y + 1) * rows.length) / bodyRows))
@@ -363,8 +363,8 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     )
   }
 
-  // Il cursore di una barra: un blocco pieno con il segno di presa ≡ al centro, che lo distingue dalla traccia
-  // vuota anche senza colore
+  // The thumb of a bar: a solid block with the grip mark ≡ in the middle, which tells it apart from the empty
+  // track even without color
   const grip = (key: string, width: number, height: number) => (
     <Box
       key={key}
@@ -381,15 +381,15 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
     </Box>
   )
 
-  const leftTitle = props.leftTotal === 0 ? `${props.leftLabel} (file non presente)` : props.leftLabel
-  const rightTitle = props.rightTotal === 0 ? `${props.rightLabel} (file cancellato)` : props.rightLabel
+  const leftTitle = props.leftTotal === 0 ? `${props.leftLabel} (not present)` : props.leftLabel
+  const rightTitle = props.rightTotal === 0 ? `${props.rightLabel} (deleted)` : props.rightLabel
   const currentBlock = blockStarts.filter(start => start <= offset + 3).length
   const position =
     rows.length === 0
-      ? 'nessuna riga da confrontare'
-      : `righe ${offset + 1}–${Math.min(offset + bodyRows, rows.length)} di ${rows.length}` +
-        ` · blocco ${Math.max(1, currentBlock)} di ${blockStarts.length}` +
-        (col > 0 ? ` · colonne ${col + 1}–${col + textWidth} di ${longest}` : '')
+      ? 'no lines to compare'
+      : `lines ${offset + 1}–${Math.min(offset + bodyRows, rows.length)} of ${rows.length}` +
+        ` · block ${Math.max(1, currentBlock)} of ${blockStarts.length}` +
+        (col > 0 ? ` · columns ${col + 1}–${col + textWidth} of ${longest}` : '')
 
   return (
     <Box flexDirection="column" width={columns}>
@@ -420,8 +420,8 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
             )
           })}
         </Box>
-        {/* La barra verticale, a destra dei due lati: una sola traccia alta quanto la finestra, divisa in spazio
-            sopra, cursore e spazio sotto. Niente posizione assoluta: il desktop la ancora altrove */}
+        {/* The vertical bar, right of the two sides: a single track as tall as the window, split into space
+            before, thumb and space after. No absolute position: the desktop anchors it elsewhere */}
         <Box
           key="compare:track"
           flexDirection="column"
@@ -436,7 +436,7 @@ const Compare: ClientModule<CompareProps, View> = (props, surface) => {
         </Box>
       </Box>
       {hasHorizontalBar && (
-        // La barra orizzontale, con la stessa grafica: traccia alta una riga, spazio a sinistra, cursore, spazio a destra
+        // The horizontal bar, with the same look: one-row track, space on the left, thumb, space on the right
         <Box flexDirection="row" height={1}>
           <Box key="compare:hbar" flexDirection="row" width={trackWidth} height={1} flexShrink={0} backgroundColor={TRACK_BACKGROUND}>
             <Box width={shownHorizontal.start} height={1} flexShrink={0} />

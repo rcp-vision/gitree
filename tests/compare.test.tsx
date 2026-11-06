@@ -16,17 +16,17 @@ const LIST = {
   plugin: 'gitree',
   component: 'Pane',
   requestId: 'gitree',
-  props: { ...PANE_PROPS, title: 'Repository' },
+  props: { ...PANE_PROPS, title: 'Repositories' },
 } as const
 
 const DIFF = {
   plugin: 'gitree',
   component: 'Pane',
   requestId: 'gitree-diff',
-  props: { ...PANE_PROPS, title: 'Confronto demo' },
+  props: { ...PANE_PROPS, title: 'Compare demo' },
 } as const
 
-// HEAD: 5 righe; copia di lavoro: la riga 2 cambiata e una riga aggiunta in fondo
+// HEAD: 5 lines; working tree: line 2 changed and one line added at the end
 const FULL_PATCH = [
   'diff --git a/src/a.ts b/src/a.ts',
   'index 1111111..2222222 100644',
@@ -45,7 +45,7 @@ const FULL_PATCH = [
 
 type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
 
-// Il nodo con quella chiave nell'albero disegnato, e il suo genitore
+// The node with that key in the drawn tree, and its parent
 function keyed(tree: unknown, key: string, parent?: Node): { node: Node; parent: Node | undefined } | undefined {
   const node = tree as Node
   if (node === null || typeof node !== 'object') return undefined
@@ -57,7 +57,7 @@ function keyed(tree: unknown, key: string, parent?: Node): { node: Node; parent:
   return undefined
 }
 
-// Le parti di una barra: spazio prima del cursore, cursore, spazio dopo
+// The parts of a bar: space before the thumb, thumb, space after
 async function barParts(desktop: { drawn: (scope: { in: string }) => Promise<unknown> }, key: string): Promise<Node[]> {
   const bar = keyed(await desktop.drawn({ in: 'compare' }), key)?.node
   return (bar?.children ?? []).filter((child): child is Node => child !== null && typeof child === 'object')
@@ -67,7 +67,7 @@ type Run = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated
 
 const ok = (stdout: string): Run => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
-// Risponde ai comandi git del mod come un repo `demo` con un file cambiato
+// Answers the mod's git commands like a `demo` repo with one changed file
 function git(argv: readonly string[], fullPatch: string): Run {
   if (argv[0] === 'find') return ok(`${ROOT}/demo/.git\n`)
   if (argv.includes('status')) {
@@ -89,9 +89,9 @@ function git(argv: readonly string[], fullPatch: string): Run {
 }
 
 function engine(on: On, fullPatch = FULL_PATCH): void {
-  // Niente sta sotto il mod: ogni hook qui fa le veci del motore
+  // Nothing sits below the mod: every hook here stands in for the engine
   on('process.run', (_, e) => ({ value: git(e.argv, fullPatch) }))
-  // La cartella della sessione: i repo si cercano lì sotto
+  // The session folder: repos are searched below it
   on('session.cwd', () => ({ value: ROOT }))
   on('clock.now', () => ({ value: Date.UTC(2026, 10, 5, 10, 0, 0) }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -111,7 +111,7 @@ async function openDiff($: Engine): Promise<void> {
   await list.unmount()
 }
 
-test('il confronto su desktop è il Client grafico, sul terminale le righe a Box e Text', async ($, on) => {
+test('on desktop the comparison is the graphical Client, on the terminal the Box and Text rows', async ($, on) => {
   engine(on)
   await openDiff($)
 
@@ -120,12 +120,12 @@ test('il confronto su desktop è il Client grafico, sul terminale le righe a Box
   expect(await desktop.find({ type: 'Button', key: 'diff:reload' })).toBeDefined()
   expect(await desktop.find({ type: 'Button', key: 'diff:close' })).toBeDefined()
   expect(await desktop.find({ type: 'Button', key: 'file:src/a.ts' })).toBeDefined()
-  // Il file intero: anche le righe lontane dai blocchi, con i numeri di riga dei due lati
+  // The whole file: also the lines far from the blocks, with the line numbers of both sides
   expect(await desktop.find({ type: 'Text', text: /^HEAD$/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /^Copia di lavoro$/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /^Working tree$/, in: 'compare' })).toBeDefined()
   expect(await desktop.find({ type: 'Text', text: /export default f/, in: 'compare' })).toBeDefined()
   expect(await desktop.find({ type: 'Text', text: /^6$/, in: 'compare' })).toBeDefined()
-  // Le parole cambiate dentro le righe appaiate hanno lo sfondo proprio, il connettore il segno ≠
+  // Changed words inside paired lines have their own background, the connector the ≠ mark
   const words = await desktop.findAll({ type: 'Text', in: 'compare' })
   const removed = words.find(word => word.props.backgroundColor === 'rgba(240, 140, 140, 0.45)')
   const added = words.find(word => word.props.backgroundColor === 'rgba(120, 200, 140, 0.45)')
@@ -133,62 +133,62 @@ test('il confronto su desktop è il Client grafico, sul terminale le righe a Box
   expect(added?.text).toBe('3')
   expect(await desktop.find({ type: 'Text', text: /─≠─/, in: 'compare' })).toBeDefined()
   expect(await desktop.find({ type: 'Text', text: /─\+─/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /blocco 1 di 2/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /block 1 of 2/, in: 'compare' })).toBeDefined()
   await desktop.unmount()
 
   const terminal = await $.ui.mount({ ...DIFF, surface: 'terminal' })
   expect(await terminal.find({ type: 'Client' })).toBeUndefined()
-  expect(await terminal.find({ type: 'Text', text: /^Copia di lavoro$/ })).toBeDefined()
+  expect(await terminal.find({ type: 'Text', text: /^Working tree$/ })).toBeDefined()
   expect(await terminal.find({ type: 'Text', text: /const b = 3/ })).toBeDefined()
   expect(await terminal.find({ type: 'Button', key: 'diff:reload' })).toBeDefined()
   expect(await terminal.find({ type: 'Button', key: 'diff:close' })).toBeDefined()
   await terminal.unmount()
 })
 
-test('i tasti e il righello spostano una sola finestra per i due lati', async ($, on) => {
-  // Un file lungo: 200 righe uguali, poi un blocco cambiato
-  const head = Array.from({ length: 200 }, (_, i) => ` riga ${i + 1}`)
-  const patch = ['@@ -1,201 +1,201 @@', ...head, '-vecchia', '+nuova', ''].join('\n')
+test('keys and the ruler move a single window for both sides', async ($, on) => {
+  // A long file: 200 equal lines, then one changed block
+  const head = Array.from({ length: 200 }, (_, i) => ` line ${i + 1}`)
+  const patch = ['@@ -1,201 +1,201 @@', ...head, '-older', '+newer', ''].join('\n')
   engine(on, patch)
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
   await desktop.resize({ columns: 100, rows: 22, in: 'compare' })
-  // La vista parte dal primo blocco
-  expect(await desktop.find({ type: 'Text', text: /^nuova$/, in: 'compare' })).toBeDefined()
+  // The view starts at the first block
+  expect(await desktop.find({ type: 'Text', text: /^newer$/, in: 'compare' })).toBeDefined()
   await desktop.key({ key: 'home', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 1–20 di 201/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /^nuova$/, in: 'compare' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 1–20 of 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /^newer$/, in: 'compare' })).toBeUndefined()
   await desktop.key({ key: 'pagedown', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 20–39 di 201/, in: 'compare' })).toBeDefined()
-  // Ogni riga mostrata ha lo stesso numero a sinistra e a destra: lo scorrimento è condiviso
+  expect(await desktop.find({ type: 'Text', text: /lines 20–39 of 201/, in: 'compare' })).toBeDefined()
+  // Every shown row has the same number on the left and on the right: scrolling is shared
   const numbers = await desktop.findAll({ type: 'Text', text: /^20$/, in: 'compare' })
   expect(numbers).toHaveLength(2)
   await desktop.key({ key: 'n', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /^nuova$/, in: 'compare' })).toBeDefined()
-  // Un clic in cima al righello riporta all'inizio del file
+  expect(await desktop.find({ type: 'Text', text: /^newer$/, in: 'compare' })).toBeDefined()
+  // A click at the top of the ruler goes back to the start of the file
   await desktop.pointer({ type: 'down', x: 99, y: 1, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 99, y: 1, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 1–20 di 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 1–20 of 201/, in: 'compare' })).toBeDefined()
   await desktop.unmount()
 })
 
-test('un file oltre il limite dei props è tagliato e il pannello lo dice', async ($, on) => {
+test('a file over the props limit is truncated and the pane says so', async ($, on) => {
   const lines = Array.from({ length: 3000 }, (_, i) => `+${'x'.repeat(60)} ${i}`)
   engine(on, ['@@ -0,0 +1,3000 @@', ...lines, ''].join('\n'))
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
-  const notice = await desktop.find({ type: 'Text', text: /Confronto tagliato/ })
-  expect(notice?.text).toMatch(/di 3000 della copia di lavoro/)
+  const notice = await desktop.find({ type: 'Text', text: /Comparison truncated/ })
+  expect(notice?.text).toMatch(/of 3000 lines of the working tree/)
   const client = await desktop.find({ type: 'Client', key: 'compare' })
   expect(JSON.stringify(client?.props.props).length).toBeLessThan(100_000)
   await desktop.unmount()
 })
 
-test('la rotella sul pannello scorre il confronto quando il pannello non ha altro da scorrere', async ($, on) => {
-  const head = Array.from({ length: 200 }, (_, i) => ` riga ${i + 1}`)
-  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-vecchia', '+nuova', ''].join('\n'))
+test('the wheel on the pane scrolls the comparison when the pane has nothing else to scroll', async ($, on) => {
+  const head = Array.from({ length: 200 }, (_, i) => ` line ${i + 1}`)
+  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-older', '+newer', ''].join('\n'))
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
@@ -205,90 +205,90 @@ test('la rotella sul pannello scorre il confronto quando il pannello non ha altr
     pointer: { column: 10, row: 12 },
   })
   expect(result.deny).toBeUndefined()
-  // Due scatti di rotella, tre righe ciascuno
-  expect(await desktop.find({ type: 'Text', text: /righe 7–26 di 201/, in: 'compare' })).toBeDefined()
+  // Two wheel notches, three lines each
+  expect(await desktop.find({ type: 'Text', text: /lines 7–26 of 201/, in: 'compare' })).toBeDefined()
   await desktop.unmount()
 })
 
-test('la barra verticale: il cursore si trascina, un clic sulla traccia porta la vista lì', async ($, on) => {
-  const head = Array.from({ length: 200 }, (_, i) => ` riga ${i + 1}`)
-  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-vecchia', '+nuova', ''].join('\n'))
+test('the vertical bar: the thumb drags, a click on the track moves the view there', async ($, on) => {
+  const head = Array.from({ length: 200 }, (_, i) => ` line ${i + 1}`)
+  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-older', '+newer', ''].join('\n'))
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
   await desktop.resize({ columns: 100, rows: 22, in: 'compare' })
   await desktop.key({ key: 'home', in: 'compare' })
-  // 20 righe in vista su 201: una sola traccia alta 20 righe, il cursore alto 2 in cima; righe corte, niente barra
-  // orizzontale
+  // 20 of 201 lines in view: a single track 20 rows high, the thumb 2 rows high at the top; short lines, no
+  // horizontal bar
   expect((await desktop.find({ type: 'Box', key: 'compare:track', in: 'compare' }))?.props.height).toBe(20)
   const [above, grip] = await barParts(desktop, 'compare:track')
   expect(above?.props?.height).toBe(0)
   expect(grip?.props).toMatchObject({ key: 'compare:thumb', height: 2 })
   expect(await desktop.find({ type: 'Box', key: 'compare:hbar', in: 'compare' })).toBeUndefined()
-  // Afferrato in cima e trascinato a metà traccia
+  // Grabbed at the top and dragged to mid-track
   await desktop.pointer({ type: 'down', x: 99, y: 1, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'move', x: 99, y: 10, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 99, y: 10, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 92–111 di 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 92–111 of 201/, in: 'compare' })).toBeDefined()
   expect((await barParts(desktop, 'compare:track'))[0]?.props?.height).toBe(9)
-  // Rilasciato, il puntatore non trascina più
+  // Once released, the pointer no longer drags
   await desktop.pointer({ type: 'move', x: 99, y: 3, in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 92–111 di 201/, in: 'compare' })).toBeDefined()
-  // Un clic in fondo alla traccia porta la vista alla fine del file
+  expect(await desktop.find({ type: 'Text', text: /lines 92–111 of 201/, in: 'compare' })).toBeDefined()
+  // A click at the bottom of the track moves the view to the end of the file
   await desktop.pointer({ type: 'down', x: 99, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 99, y: 20, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 182–201 di 201/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /^nuova$/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 182–201 of 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /^newer$/, in: 'compare' })).toBeDefined()
   await desktop.unmount()
 })
 
-test('la barra orizzontale: compare con le righe larghe, si trascina e risponde al clic sulla traccia', async ($, on) => {
-  const wide = `inizio${'.'.repeat(120)}FINE`
-  engine(on, ['@@ -1,3 +1,3 @@', ` ${wide}`, '-vecchia', '+nuova', ' fine', ''].join('\n'))
+test('the horizontal bar: appears with wide lines, drags and responds to a click on the track', async ($, on) => {
+  const wide = `begins${'.'.repeat(120)}LAST`
+  engine(on, ['@@ -1,3 +1,3 @@', ` ${wide}`, '-older', '+newer', ' end', ''].join('\n'))
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
-  // 100 colonne: 43 di testo per lato su righe di 130, traccia di 95 celle, cursore di 31
+  // 100 columns: 43 of text on each side for lines of 130, track of 95 cells, thumb of 31
   await desktop.resize({ columns: 100, rows: 22, in: 'compare' })
   expect((await desktop.find({ type: 'Box', key: 'compare:hthumb', in: 'compare' }))?.props.width).toBe(31)
-  expect(await desktop.find({ type: 'Text', text: /FINE/, in: 'compare' })).toBeUndefined()
-  // La barra sta sotto le 19 righe del confronto: riga 20 della regione
+  expect(await desktop.find({ type: 'Text', text: /LAST/, in: 'compare' })).toBeUndefined()
+  // The bar sits below the 19 comparison rows: row 20 of the region
   await desktop.pointer({ type: 'down', x: 0, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'move', x: 32, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 32, y: 20, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /colonne 45–87 di 130/, in: 'compare' })).toBeDefined()
-  // Un clic in fondo alla traccia porta la vista alla fine delle righe
+  expect(await desktop.find({ type: 'Text', text: /columns 45–87 of 130/, in: 'compare' })).toBeDefined()
+  // A click at the end of the track moves the view to the end of the lines
   await desktop.pointer({ type: 'down', x: 94, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 94, y: 20, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /colonne 88–130 di 130/, in: 'compare' })).toBeDefined()
-  expect(await desktop.findAll({ type: 'Text', text: /FINE/, in: 'compare' })).toHaveLength(2)
+  expect(await desktop.find({ type: 'Text', text: /columns 88–130 of 130/, in: 'compare' })).toBeDefined()
+  expect(await desktop.findAll({ type: 'Text', text: /LAST/, in: 'compare' })).toHaveLength(2)
   await desktop.unmount()
 })
 
-test('la barra verticale sta a destra dei due lati e risponde solo dove è disegnata', async ($, on) => {
-  const head = Array.from({ length: 200 }, (_, i) => ` riga ${i + 1}`)
-  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-vecchia', '+nuova', ''].join('\n'))
+test('the vertical bar sits right of the two sides and responds only where it is drawn', async ($, on) => {
+  const head = Array.from({ length: 200 }, (_, i) => ` line ${i + 1}`)
+  engine(on, ['@@ -1,201 +1,201 @@', ...head, '-older', '+newer', ''].join('\n'))
   await openDiff($)
 
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
   await desktop.resize({ columns: 100, rows: 22, in: 'compare' })
   await desktop.key({ key: 'home', in: 'compare' })
   const tree = await desktop.drawn({ in: 'compare' })
-  // Nessun elemento in posizione assoluta: il desktop lo ancorerebbe altrove
+  // No element with absolute position: the desktop would anchor it elsewhere
   expect(JSON.stringify(tree)).not.toContain('absolute')
-  // La riga del corpo: prima le righe dei due lati (98 colonne), ultima la traccia (2 colonne)
+  // The body row: first the rows of the two sides (98 columns), last the track (2 columns)
   const body = keyed(tree, 'compare:track')?.parent
   const parts = (body?.children ?? []).filter((child): child is Node => child !== null && typeof child === 'object')
   expect(parts).toHaveLength(2)
   expect(parts[0]?.props?.width).toBe(98)
-  expect(JSON.stringify(parts[0])).toContain('riga 1')
+  expect(JSON.stringify(parts[0])).toContain('line 1')
   expect(parts[1]?.props).toMatchObject({ key: 'compare:track', width: 2, height: 20 })
-  // Un clic sulla colonna dei segni, appena a sinistra della barra, non sposta la vista; sulla barra sì
+  // A click on the marks column, just left of the bar, does not move the view; on the bar it does
   await desktop.pointer({ type: 'down', x: 97, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 97, y: 20, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 1–20 di 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 1–20 of 201/, in: 'compare' })).toBeDefined()
   await desktop.pointer({ type: 'down', x: 98, y: 20, button: 'left', in: 'compare' })
   await desktop.pointer({ type: 'up', x: 98, y: 20, button: 'left', in: 'compare' })
-  expect(await desktop.find({ type: 'Text', text: /righe 182–201 di 201/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /lines 182–201 of 201/, in: 'compare' })).toBeDefined()
   await desktop.unmount()
 })

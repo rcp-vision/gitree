@@ -17,41 +17,41 @@ import type {
 
 const PANE = 'gitree'
 const DIFF_PANE = 'gitree-diff'
-// Il confronto grafico riceve il file intero nei props del Client, che ne tengono al più 100.000 caratteri:
-// oltre questo budget le righe si fermano e il pannello lo dice
+// The graphical comparison gets the whole file in the Client props, which hold at most 100,000 characters:
+// past this budget the lines stop and the pane says so
 const COMPARE_BUDGET = 90_000
-// Una riga oltre questa lunghezza (un file minificato) si accorcia: da sola consumerebbe il budget
+// A line longer than this (a minified file) is shortened: on its own it would use up the budget
 const COMPARE_LINE_MAX = 1_000
 const TAB_WIDTH = 4
-// Altezza del confronto grafico quando il pannello non dice quante righe ha
+// Height of the graphical comparison when the pane does not report how many rows it has
 const COMPARE_DEFAULT_ROWS = 30
 const COMPARE_MIN_ROWS = 12
 const COMPARE_MAX_ROWS = 80
-// Righe tolte e aggiunte nel confronto a Box e Text: pastello come le altre tinte del pannello
+// Removed and added lines in the Box and Text comparison: pastel like the other pane tints
 const REMOVED_BACKGROUND = 'rgba(240, 160, 160, 0.22)'
 const ADDED_BACKGROUND = 'rgba(140, 210, 160, 0.22)'
-// Oltre queste righe il confronto si ferma e lo dice: un diff enorme non va disegnato riga per riga
+// Past these rows the comparison stops and says so: a huge diff must not be drawn row by row
 const DIFF_MAX_ROWS = 800
-// Righe di contesto attorno a ogni blocco cambiato, come nel confronto di EGit con le parti uguali compresse
+// Context lines around each changed block, as in the EGit comparison with equal parts collapsed
 const DIFF_CONTEXT = 6
 const TITLE = 'Repositories'
-// I repo si cercano sotto la cartella della sessione, a qualunque profondità entro SEARCH_DEPTH; queste cartelle
-// non si esplorano: dipendenze, worktree di Claude, ambienti, cache
+// Repos are searched under the session folder, at any depth within SEARCH_DEPTH; these folders
+// are not explored: dependencies, Claude worktrees, environments, caches
 const SEARCH_DEPTH = '8'
 const SEARCH_DEPTH_LEVELS = Number(SEARCH_DEPTH)
 const SKIPPED_FOLDERS = ['node_modules', '.claude', '.direnv', '.gradle', '.venv', 'venv']
 const EVERY_MS = 30_000
-// I commit da pushare elencati sopra il confronto: oltre, il pannello dice quanti ne restano
+// Unpushed commits listed above the comparison: past this, the pane says how many are left
 const COMMITS_MAX = 50
-// Un repo su uno di questi branch, pulito e allineato, non è «in lavorazione»
+// A repo on one of these branches, clean and in sync, is not "in progress"
 const BASE_BRANCHES = ['master', 'main', 'develop']
-// Larghezze delle colonne della tabella; lo stato prende il resto
+// Table column widths; the status takes the rest
 const COLUMNS = { repo: '22%', branch: '30%', actions: '24%' } as const
-// Sfondi pastello semitrasparenti: restano leggibili sia col tema chiaro sia con quello scuro
+// Semi-transparent pastel backgrounds: they stay readable with both the light and the dark theme
 const HEADER_BACKGROUND = 'rgba(160, 180, 230, 0.16)'
 const STRIPE_BACKGROUND = 'rgba(170, 215, 200, 0.07)'
-// I pulsanti della tabella: bordo sottile grigio scuro e uno sfondo pastello per azione. Il Button nativo non accetta
-// né bordo né colore, quindi li porta il Box attorno, alto una riga: il desktop disegna il bordo come una linea
+// Table buttons: thin dark grey border and one pastel background per action. The native Button accepts
+// neither border nor color, so the surrounding Box carries them, one row high: the desktop draws the border as a line
 const CHIP_BORDER = '#3a3a3a'
 const CHIP_BACKGROUNDS = {
   change: 'rgba(250, 215, 140, 0.55)',
@@ -59,20 +59,20 @@ const CHIP_BACKGROUNDS = {
   pull: 'rgba(170, 225, 185, 0.55)',
   fetch: 'rgba(215, 215, 232, 0.6)',
 } as const
-// Fetch, pull e push passano dal GitLab e possono chiedere la passphrase della chiave
+// Fetch, pull and push go through GitLab and can ask for the key passphrase
 const ACTION_TIMEOUT_MS = 180_000
-// La chiave chiede la passphrase a ogni connessione: una connessione SSH condivisa per host, tenuta aperta 2 minuti,
-// fa sì che un fetch di tutti i repo la chieda una volta per host e non una per repo
+// The key asks for the passphrase on every connection: one shared SSH connection per host, kept open 2 minutes,
+// means a fetch of all repos asks once per host and not once per repo
 const GIT_ENV = {
   GIT_SSH_COMMAND: 'ssh -o ControlMaster=auto -o ControlPath=/tmp/gitree-ssh-%C -o ControlPersist=120',
 }
 
-// Su Windows l'ambiente resta quello di git: l'OpenSSH di sistema rifiuta ControlMaster e il fetch fallirebbe
+// On Windows git keeps its own environment: the system OpenSSH rejects ControlMaster and the fetch would fail
 function gitEnv(path: string): typeof GIT_ENV | undefined {
   return isWindowsPath(path) ? undefined : GIT_ENV
 }
 
-// Cambia il tag quando cambiano i campi di RepoStatus: scarta quanto salvato da una versione precedente
+// Change the tag when the RepoStatus fields change: it discards what an earlier version saved
 const snapshot = atom({ plugin: 'gitree', key: 'snapshot' } as const, { updatedAt: null, repos: [] }, {
   shape: 'snapshot-3',
 })
@@ -83,19 +83,19 @@ const wheel = atom({ plugin: 'gitree', key: 'wheel' } as const, { seq: 0, by: 0 
 })
 
 let isRefreshing = false
-// Il motivo per cui il Client del confronto ha fallito: il pannello torna al confronto a Box e Text fino a «Rileggi»
+// Why the comparison Client failed: the pane falls back to the Box and Text comparison until "Reload"
 let compareFault: string | null = null
 
-// Un percorso Windows: lettera di unità o percorso di rete. Lì `find` è un altro programma (cerca testo nei file)
-// e l'OpenSSH di sistema non ha la connessione condivisa
+// A Windows path: drive letter or network path. There `find` is another program (it searches text in files)
+// and the system OpenSSH has no shared connection
 function isWindowsPath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
 }
 
-// Oltre queste cartelle lette la ricerca su Windows si ferma: una sessione aperta su un disco intero non blocca il pannello
+// Past this many folders read, the Windows search stops: a session opened on a whole drive does not block the pane
 const WALK_MAX_DIRS = 4_000
 
-// Su Windows i repo si cercano leggendo le cartelle con $.fs: un repo trovato non si esplora, i link non si seguono
+// On Windows repos are found by reading folders with $.fs: a found repo is not explored, links are not followed
 async function walkRepos($: EngineInterface, root: string): Promise<string[]> {
   const found: string[] = []
   let level = [root]
@@ -119,7 +119,7 @@ async function walkRepos($: EngineInterface, root: string): Promise<string[]> {
   return found.sort()
 }
 
-// La cartella della sessione e ogni repo annidato: `.git` è una cartella, o un file per worktree e submodule
+// The session folder and every nested repo: `.git` is a folder, or a file for worktrees and submodules
 async function listRepos($: EngineInterface, root: string): Promise<string[]> {
   if (isWindowsPath(root)) return walkRepos($, root.replace(/[\\/]+$/, ''))
   const skipped = SKIPPED_FOLDERS.flatMap((name, index) => (index === 0 ? ['-name', name] : ['-o', '-name', name]))
@@ -134,9 +134,9 @@ async function listRepos($: EngineInterface, root: string): Promise<string[]> {
     .sort()
 }
 
-// La cartella più profonda che contiene tutti i repo: se stanno tutti sotto `git/`, i nomi partono da lì e la
-// colonna Repo non ripete un prefisso uguale per tutti. Un repo solo, o la cartella della sessione fra i repo,
-// danno la cartella sopra quella del repo più alto
+// The deepest folder that contains all repos: if they all sit under `git/`, names start there and the
+// Repo column does not repeat a prefix shared by all. A single repo, or the session folder among the repos,
+// give the folder above the topmost repo
 function commonParent(paths: string[]): string {
   const parents = paths.map(path => slashed(path)).map(path => path.slice(0, path.lastIndexOf('/')))
   if (parents.length === 0) return ''
@@ -149,12 +149,12 @@ function commonParent(paths: string[]): string {
   return common
 }
 
-// I nomi si calcolano con la barra; git riceve il percorso com'è, con la barra rovesciata su Windows
+// Names are computed with forward slashes; git gets the path as is, with backslashes on Windows
 function slashed(path: string): string {
   return path.replace(/\\/g, '/')
 }
 
-// Il nome mostrato: il percorso rispetto alla cartella comune, o l'ultimo pezzo
+// The displayed name: the path relative to the common folder, or the last segment
 function repoName(base: string, original: string): string {
   const root = slashed(base)
   const path = slashed(original)
@@ -162,7 +162,7 @@ function repoName(base: string, original: string): string {
   return path.slice(path.lastIndexOf('/') + 1) || path
 }
 
-// Legge lo stato senza fetch: ahead e behind sono rispetto al remote come era all'ultimo fetch
+// Reads the status without fetching: ahead and behind are relative to the remote as of the last fetch
 async function repoStatus($: EngineInterface, base: string, path: string): Promise<RepoStatus> {
   const name = repoName(base, path)
   const status: RepoStatus = {
@@ -180,7 +180,7 @@ async function repoStatus($: EngineInterface, base: string, path: string): Promi
   }
   const run = await $.process.run(['git', '-C', path, 'status', '--porcelain=v2', '--branch'], { timeoutMs: 15_000 })
   if (run.exitCode !== 0) {
-    return { ...status, error: run.stderr.trim().split('\n')[0] ?? 'git status fallito' }
+    return { ...status, error: run.stderr.trim().split('\n')[0] ?? 'git status failed' }
   }
   for (const line of run.stdout.split('\n')) {
     if (line.startsWith('# branch.head ')) {
@@ -194,12 +194,12 @@ async function repoStatus($: EngineInterface, base: string, path: string): Promi
     } else if (line.startsWith('? ')) {
       status.untracked += 1
     } else if (line.startsWith('1 ') || line.startsWith('2 ')) {
-      // XY: X lo stato nell'indice, Y nella copia di lavoro; il punto vuol dire invariato
+      // XY: X the state in the index, Y in the working tree; a dot means unchanged
       status.changed += 1
       if (line[2] !== '.') status.staged += 1
       if (line[3] !== '.') status.unstaged += 1
     } else if (line.startsWith('u ')) {
-      // Un conflitto si risolve nella copia di lavoro
+      // A conflict is resolved in the working tree
       status.changed += 1
       status.unstaged += 1
     }
@@ -246,29 +246,29 @@ async function refresh($: EngineInterface): Promise<void> {
 function actionArgv(repo: RepoStatus, action: RepoAction): string[] {
   const git = ['git', '-C', repo.path]
   if (action === 'fetch') return [...git, 'fetch', '--prune']
-  // Solo fast-forward: un pull dal pannello non crea mai un merge
+  // Fast-forward only: a pull from the pane never creates a merge
   if (action === 'pull') return [...git, 'pull', '--ff-only']
   return repo.upstream === null ? [...git, 'push', '-u', 'origin', 'HEAD'] : [...git, 'push']
 }
 
-// Parte solo dal pulsante della riga: è la persona a chiedere l'azione, il pannello non la lancia mai da sé
+// Starts only from the row button: the person asks for the action, the pane never launches it on its own
 async function runAction($: EngineInterface, repo: RepoStatus, action: RepoAction): Promise<void> {
   const current = await read($, busy)
   if (current[repo.name] !== undefined) {
     return
   }
   await update($, busy, state => ({ ...state, [repo.name]: action }))
-  $.ui.toast(`${repo.name}: ${action} in corso, può chiedere la passphrase della chiave`)
+  $.ui.toast(`${repo.name}: ${action} running, may ask for the key passphrase`)
   try {
     const run = await $.process.run(actionArgv(repo, action), { timeoutMs: ACTION_TIMEOUT_MS, env: gitEnv(repo.path) })
     const detail = (run.exitCode === 0 ? run.stdout || run.stderr : run.stderr).trim().split('\n').pop() ?? ''
     $.ui.toast(
       run.exitCode === 0
-        ? `${repo.name}: ${action} riuscito${detail ? ` (${detail})` : ''}`
-        : `${repo.name}: ${action} fallito, ${detail || `codice ${run.exitCode}`}`,
+        ? `${repo.name}: ${action} succeeded${detail ? ` (${detail})` : ''}`
+        : `${repo.name}: ${action} failed, ${detail || `exit code ${run.exitCode}`}`,
     )
   } catch (error) {
-    $.ui.toast(`${repo.name}: ${action} non eseguito, ${String(error)}`)
+    $.ui.toast(`${repo.name}: ${action} not run, ${String(error)}`)
   } finally {
     await update($, busy, state => {
       const { [repo.name]: _done, ...rest } = state
@@ -278,11 +278,11 @@ async function runAction($: EngineInterface, repo: RepoStatus, action: RepoActio
   }
 }
 
-// I due lati di un confronto come argomenti di git diff: nessuno è l'indice contro la copia di lavoro,
-// --cached HEAD contro l'indice, un solo commit quel commit contro la copia di lavoro
+// The two sides of a comparison as git diff arguments: none is the index against the working tree,
+// --cached HEAD against the index, a single commit that commit against the working tree
 type DiffSides = { revs: string[]; withUntracked: boolean }
 
-// I file cambiati fra i due lati, più i non tracciati quando il lato nuovo è la copia di lavoro
+// The files changed between the two sides, plus the untracked ones when the new side is the working tree
 async function changedFiles($: EngineInterface, path: string, sides: DiffSides): Promise<DiffFile[]> {
   const [numstat, untracked] = await Promise.all([
     $.process.run(['git', '-C', path, 'diff', ...sides.revs, '--numstat'], { timeoutMs: 15_000 }),
@@ -309,7 +309,7 @@ async function changedFiles($: EngineInterface, path: string, sides: DiffSides):
   return files
 }
 
-// Il diff unificato diventa righe affiancate: i blocchi di righe tolte e aggiunte si appaiano riga per riga
+// The unified diff becomes side-by-side rows: blocks of removed and added lines are paired line by line
 function sideBySide(patch: string): DiffRow[] {
   const rows: DiffRow[] = []
   let left = 0
@@ -336,7 +336,7 @@ function sideBySide(patch: string): DiffRow[] {
       flush()
       left = Number(hunk[1]) - 1
       right = Number(hunk[2]) - 1
-      rows.push({ header: `righe ${hunk[1]} → ${hunk[2]}${hunk[3] ?? ''}` })
+      rows.push({ header: `lines ${hunk[1]} → ${hunk[2]}${hunk[3] ?? ''}` })
       isInHunk = true
     } else if (!isInHunk || line.startsWith('\\')) {
       continue
@@ -356,7 +356,7 @@ function sideBySide(patch: string): DiffRow[] {
   return rows
 }
 
-// Un non tracciato si confronta con un file vuoto; --no-index esce con 1 quando i file differiscono
+// An untracked file is compared with an empty file; --no-index exits with 1 when the files differ
 function fileDiffArgv(path: string, file: DiffFile, sides: DiffSides, context: string): string[] {
   return file.isUntracked
     ? ['git', '-C', path, 'diff', '--no-color', context, '--no-index', '--', '/dev/null', file.path]
@@ -377,8 +377,8 @@ function expandTabs(line: string): string {
   return out
 }
 
-// Il diff con contesto completo è un solo blocco @@ che contiene il file intero: le righe con lo spazio
-// stanno nei due lati, quelle con - e + formano i blocchi cambiati
+// The diff with full context is a single @@ hunk holding the whole file: lines starting with a space
+// belong to both sides, those with - and + form the changed blocks
 function parseFullDiff(patch: string): { left: string[]; right: string[]; blocks: CompareBlock[] } {
   const left: string[] = []
   const right: string[] = []
@@ -412,8 +412,8 @@ function parseFullDiff(patch: string): { left: string[]; right: string[]; blocks
   return { left, right, blocks }
 }
 
-// Taglia il confronto alla prima riga allineata che sfora il budget dei props: i due lati si fermano nello
-// stesso punto, così la parte mostrata resta appaiata come nel file intero
+// Cuts the comparison at the first aligned row that exceeds the props budget: both sides stop at the
+// same point, so the shown part stays paired as in the whole file
 function fitCompare(
   parsed: { left: string[]; right: string[]; blocks: CompareBlock[] },
   path: string,
@@ -435,7 +435,7 @@ function fitCompare(
   let r = 0
   let isTruncated = false
   const blocks: CompareBlock[] = []
-  // Avanza riga per riga fino a `untilL`/`untilR`; false appena il budget finisce
+  // Advances row by row up to `untilL`/`untilR`; false as soon as the budget runs out
   const take = (untilL: number, untilR: number, block: CompareBlock | null): boolean => {
     while (l < untilL || r < untilR) {
       const rowCost = (l < untilL ? cost(left[l] ?? '') : 0) + (r < untilR ? cost(right[r] ?? '') : 0)
@@ -486,32 +486,32 @@ async function fileCompare(
   sides: DiffSides,
   labels: [string, string],
 ): Promise<ComparePayload> {
-  // Contesto enorme: git mette il file intero in un solo blocco, allineato col suo algoritmo di diff
+  // Huge context: git puts the whole file in a single hunk, aligned with its diff algorithm
   const run = await $.process.run(fileDiffArgv(path, file, sides, '-U100000000'), { timeoutMs: 15_000 })
   return fitCompare(parseFullDiff(run.stdout), file.path, file.isUntracked, labels)
 }
 
-// I due lati e i commit per ogni tipo di confronto. I commit da pushare partono dal punto in cui il branch si è
-// staccato dall'upstream: i commit arrivati sul remote e non ancora pullati non entrano nel confronto
+// The two sides and the commits for each kind of comparison. Unpushed commits start from the point where the branch
+// left the upstream: commits that reached the remote and are not pulled yet stay out of the comparison
 async function diffPlan(
   $: EngineInterface,
   repo: RepoStatus,
   kind: DiffKind,
 ): Promise<{ sides: DiffSides; labels: [string, string]; commits: DiffCommit[] }> {
   if (kind === 'staged') {
-    return { sides: { revs: ['--cached'], withUntracked: false }, labels: ['HEAD', 'Indice'], commits: [] }
+    return { sides: { revs: ['--cached'], withUntracked: false }, labels: ['HEAD', 'Index'], commits: [] }
   }
   if (kind === 'unstaged') {
-    // Senza nulla in stage l'indice coincide con HEAD: il lato sinistro si chiama come lo conosce chi legge
-    const left = repo.staged > 0 ? 'Indice' : 'HEAD'
-    return { sides: { revs: [], withUntracked: true }, labels: [left, 'Copia di lavoro'], commits: [] }
+    // With nothing staged the index matches HEAD: the left side takes the name the reader knows
+    const left = repo.staged > 0 ? 'Index' : 'HEAD'
+    return { sides: { revs: [], withUntracked: true }, labels: [left, 'Working tree'], commits: [] }
   }
-  if (repo.upstream === null) throw new Error('il branch non ha upstream')
+  if (repo.upstream === null) throw new Error('the branch has no upstream')
   const mergeBase = await $.process.run(['git', '-C', repo.path, 'merge-base', 'HEAD', repo.upstream], {
     timeoutMs: 15_000,
   })
   const base = mergeBase.stdout.trim()
-  if (mergeBase.exitCode !== 0 || base.length === 0) throw new Error(`nessun antenato comune con ${repo.upstream}`)
+  if (mergeBase.exitCode !== 0 || base.length === 0) throw new Error(`no common ancestor with ${repo.upstream}`)
   const log = await $.process.run(
     ['git', '-C', repo.path, 'log', '--format=%h%x09%s', `-n${COMMITS_MAX}`, `${base}..HEAD`],
     { timeoutMs: 15_000 },
@@ -526,7 +526,7 @@ async function diffPlan(
   return { sides: { revs: [base, 'HEAD'], withUntracked: false }, labels: [repo.upstream, 'HEAD'], commits }
 }
 
-// Il confronto si legge alla pressione e si conserva: il pannello lo ridisegna senza rilanciare git
+// The comparison is read on press and kept: the pane redraws it without running git again
 async function showDiff($: EngineInterface, repo: RepoStatus, kind: DiffKind, selected?: string): Promise<void> {
   const path = repo.path
   const { sides, labels, commits } = await diffPlan($, repo, kind)
@@ -551,17 +551,17 @@ async function showDiff($: EngineInterface, repo: RepoStatus, kind: DiffKind, se
     hiddenRows: Math.max(0, rows.length - DIFF_MAX_ROWS),
     compare,
   }))
-  // focus: il link porta subito sulla scheda del confronto, non la apre dietro a Repositories
-  await $.ui.open({ id: DIFF_PANE, title: `Confronto ${repo.name}`, focus: true })
+  // focus: the link goes straight to the comparison tab, it does not open it behind Repositories
+  await $.ui.open({ id: DIFF_PANE, title: `Compare ${repo.name}`, focus: true })
 }
 
 function startShowDiff($: EngineInterface, repo: RepoStatus, kind: DiffKind, selected?: string): void {
-  showDiff($, repo, kind, selected).catch(error => $.ui.toast(`${repo.name}: confronto non letto, ${String(error)}`))
+  showDiff($, repo, kind, selected).catch(error => $.ui.toast(`${repo.name}: comparison not read, ${String(error)}`))
 }
 
 let isFetchingAll = false
 
-// Uno dopo l'altro: il primo fetch verso un host apre la connessione condivisa, gli altri la riusano
+// One after the other: the first fetch to a host opens the shared connection, the others reuse it
 async function fetchAll($: EngineInterface): Promise<void> {
   if (isFetchingAll) {
     return
@@ -569,7 +569,7 @@ async function fetchAll($: EngineInterface): Promise<void> {
   isFetchingAll = true
   try {
     const { repos } = await read($, snapshot)
-    $.ui.toast(`Fetch di ${repos.length} repository: la passphrase può servire una volta per host`)
+    $.ui.toast(`Fetching ${repos.length} repositories: the passphrase may be needed once per host`)
     const failed: string[] = []
     for (const repo of repos) {
       await update($, busy, state => ({ ...state, [repo.name]: 'fetch' as RepoAction }))
@@ -587,8 +587,8 @@ async function fetchAll($: EngineInterface): Promise<void> {
     }
     $.ui.toast(
       failed.length === 0
-        ? `Fetch riuscito su ${repos.length} repository`
-        : `Fetch fallito su ${failed.length} di ${repos.length}: ${failed.join(', ')}`,
+        ? `Fetch succeeded on ${repos.length} repositories`
+        : `Fetch failed on ${failed.length} of ${repos.length}: ${failed.join(', ')}`,
     )
   } finally {
     isFetchingAll = false
@@ -597,14 +597,14 @@ async function fetchAll($: EngineInterface): Promise<void> {
 }
 
 function startFetchAll($: EngineInterface): void {
-  fetchAll($).catch(error => $.ui.log(`gitree: fetch di tutti: ${String(error)}`, { to: 'debug' }))
+  fetchAll($).catch(error => $.ui.log(`gitree: fetch all: ${String(error)}`, { to: 'debug' }))
 }
 
 function startAction($: EngineInterface, repo: RepoStatus, action: RepoAction): void {
   runAction($, repo, action).catch(error => $.ui.log(`gitree: ${action} ${repo.name}: ${String(error)}`, { to: 'debug' }))
 }
 
-// Dal timer, da un pulsante o dopo un comando: un errore finisce nel log di debug, non fa cadere chi chiama
+// From the timer, a button or after a command: an error goes to the debug log, it does not bring down the caller
 function refreshInBackground($: EngineInterface): void {
   refresh($).catch(error => $.ui.log(`gitree: ${String(error)}`, { to: 'debug' }))
 }
@@ -621,17 +621,17 @@ function isInProgress(repo: RepoStatus): boolean {
   )
 }
 
-// Lo stato è sempre scritto per esteso: il colore lo rinforza, non lo sostituisce
+// The status is always spelled out: color reinforces it, it does not replace it
 function describe(repo: RepoStatus): string {
   if (repo.error !== null) {
-    return `errore: ${repo.error}`
+    return `error: ${repo.error}`
   }
-  // Unstaged, Staged e Da pushare sono i link accanto: qui resta solo ciò che non ha un confronto
+  // Unstaged, Staged and Unpushed are the links next to it: only what has no comparison stays here
   const parts: string[] = []
-  if (repo.upstream === null) parts.push(repo.ahead > 0 ? `senza upstream, ${repo.ahead} commit locali` : 'senza upstream')
-  if (repo.behind > 0) parts.push(`${repo.behind} da pullare`)
+  if (repo.upstream === null) parts.push(repo.ahead > 0 ? `no upstream, ${repo.ahead} local commits` : 'no upstream')
+  if (repo.behind > 0) parts.push(`${repo.behind} to pull`)
   if (parts.length > 0) return parts.join(', ')
-  return repo.changed + repo.untracked + repo.ahead > 0 ? '' : 'pulito'
+  return repo.changed + repo.untracked + repo.ahead > 0 ? '' : 'clean'
 }
 
 function color(repo: RepoStatus): 'error' | 'warning' | 'suggestion' | 'success' {
@@ -641,11 +641,11 @@ function color(repo: RepoStatus): 'error' | 'warning' | 'suggestion' | 'success'
   return 'success'
 }
 
-// «righe della copia di lavoro», «dell'indice», «di HEAD», «di origin/develop»
+// "of the working tree", "of the index", "of HEAD", "of origin/develop"
 function ofSide(label: string): string {
-  if (label === 'Copia di lavoro') return 'della copia di lavoro'
-  if (label === 'Indice') return "dell'indice"
-  return `di ${label}`
+  if (label === 'Working tree') return 'of the working tree'
+  if (label === 'Index') return 'of the index'
+  return `of ${label}`
 }
 
 function clockTime(epochMs: number): string {
@@ -658,7 +658,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gitree',
-      description: 'Mostra repo, branch e stato dei repository git nella cartella della sessione',
+      description: 'Shows repo, branch and status of the git repositories in the session folder',
     })
     void $.ui.open({ id: PANE, title: TITLE })
     refreshInBackground($)
@@ -671,10 +671,10 @@ export const register: Register = on => {
     await $.ui.open({ id: PANE, title: TITLE })
     await refresh($)
 
-    return { text: 'Pannello Repositories aperto e aggiornato.' }
+    return { text: 'Repositories pane opened and refreshed.' }
   })
 
-  // Dopo un comando git in sessione lo stato cambia: non aspettare il prossimo giro del timer
+  // After a git command in the session the status changes: do not wait for the next timer tick
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
     if (typeof e.command === 'string' && /\bgit\b/.test(e.command)) {
@@ -688,14 +688,14 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const { updatedAt, repos } = await read($, snapshot)
     const running = await read($, busy)
-    // In lavorazione prima, poi i puliti: tutti hanno almeno il fetch
+    // In progress first, then the clean ones: all of them have at least fetch
     const rows = [...repos.filter(isInProgress), ...repos.filter(repo => !isInProgress(repo))]
-    // Il terminale non sempre disegna i colori con trasparenza: lì niente sfondi
+    // The terminal does not always draw colors with transparency: no backgrounds there
     const hasBackgrounds = e.surface !== 'terminal'
-    // Compatto in altezza: niente bordi per cella né margini verticali, un solo bordo attorno alla tabella
+    // Compact in height: no per-cell borders or vertical margins, a single border around the table
     const cell = { paddingX: 1 } as const
-    // Sul desktop un Button semplice dentro un Box con il bordo; sul terminale il pulsante del terminale, «[ etichetta ]»,
-    // perché lì il bordo aggiungerebbe due righe a ogni riga della tabella
+    // On the desktop a plain Button inside a bordered Box; on the terminal the terminal button, "[ label ]",
+    // because there the border would add two rows to every table row
     const chip = (key: string, label: string, tint: keyof typeof CHIP_BACKGROUNDS, onPress: () => void) =>
       hasBackgrounds ? (
         <Box
@@ -720,7 +720,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        {updatedAt === null && <Text dimColor size="footnote">Lettura dei repository in corso…</Text>}
+        {updatedAt === null && <Text dimColor size="footnote">Reading repositories…</Text>}
         <Box flexDirection="column" borderStyle="single" borderDimColor>
         {rows.length > 0 && (
           <Box flexDirection="row" key="header" backgroundColor={hasBackgrounds ? HEADER_BACKGROUND : undefined}>
@@ -731,10 +731,10 @@ export const register: Register = on => {
               <Text weight="semibold" size="footnote">Branch</Text>
             </Box>
             <Box {...cell} flexGrow={1}>
-              <Text weight="semibold" size="footnote">Stato</Text>
+              <Text weight="semibold" size="footnote">Status</Text>
             </Box>
             <Box {...cell} width={COLUMNS.actions}>
-              <Text weight="semibold" size="footnote">Azioni</Text>
+              <Text weight="semibold" size="footnote">Actions</Text>
             </Box>
           </Box>
         )}
@@ -756,7 +756,7 @@ export const register: Register = on => {
                 </Text>
               </Box>
               <Box {...cell} flexGrow={1} flexDirection="row" columnGap={1} alignItems="center">
-                {/* Come nella vista Git Staging di EGit: i non tracciati stanno fra gli unstaged */}
+                {/* As in the EGit Git Staging view: untracked files count among the unstaged */}
                 {repo.unstaged + repo.untracked > 0 &&
                   chip(`${repo.name}:diff`, `Unstaged ${repo.unstaged + repo.untracked}`, 'change', () =>
                     startShowDiff($, repo, 'unstaged'),
@@ -767,7 +767,7 @@ export const register: Register = on => {
                   )}
                 {repo.ahead > 0 &&
                   repo.upstream !== null &&
-                  chip(`${repo.name}:diff-push`, `Da pushare ${repo.ahead}`, 'push', () =>
+                  chip(`${repo.name}:diff-push`, `Unpushed ${repo.ahead}`, 'push', () =>
                     startShowDiff($, repo, 'push'),
                   )}
                 {describe(repo).length > 0 && (
@@ -777,7 +777,7 @@ export const register: Register = on => {
                 )}
               </Box>
               <Box {...cell} width={COLUMNS.actions} flexDirection="row" columnGap={1} alignItems="center">
-                {action !== undefined && <Text dimColor size="footnote">{action} in corso…</Text>}
+                {action !== undefined && <Text dimColor size="footnote">{action} running…</Text>}
                 {action === undefined &&
                   chip(`${repo.name}:fetch`, 'Fetch', 'fetch', () => startAction($, repo, 'fetch'))}
                 {action === undefined &&
@@ -799,11 +799,11 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row" columnGap={1}>
           <Button key="refresh" onPress={() => startFetchAll($)}>
-            <Text size="caption">Aggiorna (fetch di tutti)</Text>
+            <Text size="caption">Refresh (fetch all)</Text>
           </Button>
           {updatedAt !== null && (
             <Text dimColor size="caption">
-              letto alle {clockTime(updatedAt)}; push e pull rispetto all'ultimo fetch
+              read at {clockTime(updatedAt)}; push and pull as of the last fetch
             </Text>
           )}
         </Box>
@@ -816,16 +816,16 @@ export const register: Register = on => {
     const { Box, Text, Button } = table
     const shown = await read($, diff)
     if (shown === null) {
-      return <Text dimColor>Scegli Unstaged, Staged o Da pushare nel pannello Repositories.</Text>
+      return <Text dimColor>Choose Unstaged, Staged or Unpushed in the Repositories pane.</Text>
     }
     const { repos } = await read($, snapshot)
     const repo = repos.find(one => one.name === shown.repo)
     const selected = shown.files.find(file => file.path === shown.selected)
-    // Il confronto grafico solo sul desktop; terminale, vscode e mobile, o un Client guasto, usano le righe a Box e Text
+    // The graphical comparison only on the desktop; terminal, vscode and mobile, or a broken Client, use Box and Text rows
     const Client = e.surface === 'desktop' && 'Client' in table ? table.Client : undefined
     const compare = Client !== undefined && compareFault === null ? shown.compare : null
     const scrolled = await read($, wheel)
-    // Il confronto prende l'altezza che resta nel pannello: titolo, elenco dei file col bordo, avvisi, pulsanti
+    // The comparison takes the height left in the pane: title, bordered file list, notices, buttons
     const roomRows = e.props.scroll.bodyRows
     const commitRows = shown.commits.length > 0 ? shown.commits.length + 3 : 0
     const otherRows = 1 + commitRows + Math.max(1, shown.files.length) + 2 + 2 + 1
@@ -833,9 +833,9 @@ export const register: Register = on => {
       roomRows > 0
         ? Math.min(COMPARE_MAX_ROWS, Math.max(COMPARE_MIN_ROWS, roomRows - otherRows))
         : COMPARE_DEFAULT_ROWS
-    // Come nel confronto di EGit: a sinistra il lato vecchio, a destra il nuovo, le righe cambiate evidenziate
+    // As in the EGit comparison: the old side on the left, the new one on the right, changed lines highlighted
     const half = { width: '50%', flexDirection: 'row', columnGap: 1, paddingX: 1 } as const
-    // Il terminale non sempre disegna la trasparenza: lì le chiavi di tema dei diff e nessuna tinta d'intestazione
+    // The terminal does not always draw transparency: there the diff theme keys and no header tint
     const isTerminal = e.surface === 'terminal'
     const headerBackground = isTerminal ? undefined : HEADER_BACKGROUND
     const side = (value: { number: number; text: string; isChanged: boolean } | null, which: 'left' | 'right') => (
@@ -877,7 +877,7 @@ export const register: Register = on => {
             {shown.leftLabel} → {shown.rightLabel}
           </Text>
           <Text dimColor size="caption">
-            letto alle {clockTime(shown.readAt)}
+            read at {clockTime(shown.readAt)}
           </Text>
         </Box>
         {shown.commits.length > 0 && (
@@ -894,7 +894,7 @@ export const register: Register = on => {
             ))}
             {repo !== undefined && repo.ahead > shown.commits.length && (
               <Text dimColor size="caption">
-                … altri {repo.ahead - shown.commits.length} commit
+                … {repo.ahead - shown.commits.length} more commits
               </Text>
             )}
           </Box>
@@ -902,7 +902,7 @@ export const register: Register = on => {
         <Box flexDirection="column" borderStyle="single" borderDimColor>
           {shown.files.length === 0 && (
             <Text dimColor size="caption">
-              Nessuna differenza fra {shown.leftLabel} e {shown.rightLabel}.
+              No differences between {shown.leftLabel} and {shown.rightLabel}.
             </Text>
           )}
           {shown.files.map(file => (
@@ -918,7 +918,7 @@ export const register: Register = on => {
                 </Text>
               </Button>
               <Text size="caption" color="success">
-                {file.isUntracked ? 'nuovo' : file.isBinary ? 'binario' : `+${file.added}`}
+                {file.isUntracked ? 'new' : file.isBinary ? 'binary' : `+${file.added}`}
               </Text>
               {!file.isUntracked && !file.isBinary && (
                 <Text size="caption" color="error">
@@ -928,22 +928,22 @@ export const register: Register = on => {
             </Box>
           ))}
         </Box>
-        {selected?.isBinary === true && <Text dimColor>File binario: nessun confronto riga per riga.</Text>}
+        {selected?.isBinary === true && <Text dimColor>Binary file: no line-by-line comparison.</Text>}
         {Client !== undefined && compareFault !== null && (
           <Text dimColor size="caption">
-            Confronto grafico non disponibile ({compareFault}): mostrate le righe cambiate con il contesto.
+            Graphical comparison unavailable ({compareFault}): showing the changed lines with context.
           </Text>
         )}
         {compare !== null && compare.isTruncated && (
           <Text color="warning" size="caption">
-            Confronto tagliato: mostrate {compare.left.length} di {compare.leftTotal} righe {ofSide(compare.leftLabel)} e{' '}
-            {compare.right.length} di {compare.rightTotal} {ofSide(compare.rightLabel)}, il limite del pannello è di
-            100.000 caratteri.
+            Comparison truncated: showing {compare.left.length} of {compare.leftTotal} lines {ofSide(compare.leftLabel)} and{' '}
+            {compare.right.length} of {compare.rightTotal} lines {ofSide(compare.rightLabel)}; the pane limit is
+            100,000 characters.
           </Text>
         )}
         {compare !== null && compare.longLines > 0 && (
           <Text dimColor size="caption">
-            {compare.longLines} righe più lunghe di {COMPARE_LINE_MAX} caratteri sono accorciate.
+            {compare.longLines} lines longer than {COMPARE_LINE_MAX} characters are shortened.
           </Text>
         )}
         {Client !== undefined && compare !== null && (
@@ -988,7 +988,7 @@ export const register: Register = on => {
         )}
         {compare === null && shown.hiddenRows > 0 && (
           <Text dimColor size="caption">
-            … altre {shown.hiddenRows} righe non mostrate
+            … {shown.hiddenRows} more lines not shown
           </Text>
         )}
         <Box flexDirection="row" columnGap={1}>
@@ -996,24 +996,24 @@ export const register: Register = on => {
             <Button
               key="diff:reload"
               onPress={() => {
-                // Rileggi ritenta anche il confronto grafico dopo un guasto del Client
+                // Reload also retries the graphical comparison after a Client failure
                 compareFault = null
                 startShowDiff($, repo, shown.kind, shown.selected ?? undefined)
               }}
             >
-              <Text size="caption">Rileggi</Text>
+              <Text size="caption">Reload</Text>
             </Button>
           )}
           <Button key="diff:close" role="dismiss" onPress={() => void $.ui.close({ id: DIFF_PANE })}>
-            <Text size="caption">Chiudi</Text>
+            <Text size="caption">Close</Text>
           </Button>
         </Box>
       </Box>
     )
   })
 
-  // La rotella sul pannello dei diff scorre il confronto grafico, quando il pannello sta tutto nel suo spazio
-  // e non ha niente da scorrere per conto suo; altrimenti scorre il pannello come sempre
+  // The wheel on the diff pane scrolls the graphical comparison when the pane fits in its space
+  // and has nothing of its own to scroll; otherwise it scrolls the pane as usual
   on('ui.scroll', { requestId: DIFF_PANE }, async ($, e, next) => {
     const takeWheel = async (): Promise<boolean> => {
       const shown = await read($, diff)
@@ -1028,20 +1028,20 @@ export const register: Register = on => {
       }
       return isForCompare
     }
-    // Un errore qui non deve bloccare lo scorrimento del pannello
+    // An error here must not block pane scrolling
     const isTaken = await takeWheel().catch(error => {
-      $.ui.log(`gitree: rotella sul confronto: ${String(error)}`, { to: 'debug' })
+      $.ui.log(`gitree: wheel on comparison: ${String(error)}`, { to: 'debug' })
       return false
     })
 
     return isTaken ? {} : next(e)
   })
 
-  // Il Client del confronto ha fallito: il motore ridisegna il pannello, che torna alle righe a Box e Text
+  // The comparison Client failed: the engine redraws the pane, which falls back to the Box and Text rows
   on('ui.fault', async ($, e, next) => {
     if (e.requestId === DIFF_PANE) {
       compareFault = e.reason
-      $.ui.log(`gitree: confronto grafico (${e.phase}): ${e.reason}`, { to: 'debug' })
+      $.ui.log(`gitree: graphical comparison (${e.phase}): ${e.reason}`, { to: 'debug' })
     }
 
     return next(e)

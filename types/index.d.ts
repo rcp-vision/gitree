@@ -1,5 +1,5 @@
 export type RepoStatus = {
-  /** Il percorso rispetto alla cartella della sessione; `path` è quello assoluto. */
+  /** The path relative to the session folder; `path` is the absolute one. */
   name: string
   path: string
   branch: string
@@ -7,7 +7,7 @@ export type RepoStatus = {
   ahead: number
   behind: number
   changed: number
-  /** File con modifiche nell'indice e file con modifiche non ancora in stage: uno stesso file può contare in entrambi. */
+  /** Files with changes in the index and files with changes not yet staged: the same file can count in both. */
   staged: number
   unstaged: number
   untracked: number
@@ -18,78 +18,78 @@ export type RepoSnapshot = { updatedAt: number | null; repos: RepoStatus[] }
 
 export type RepoAction = 'fetch' | 'pull' | 'push'
 
-/** Le azioni git in corso, per nome del repo: la riga mostra «in corso» al posto dei pulsanti. */
+/** The git actions running, by repo name: the row shows "running" instead of the buttons. */
 export type RepoBusy = Record<string, RepoAction>
 
 /**
- * Cosa confronta il pannello dei diff: `unstaged` l'indice con la copia di lavoro (non tracciati compresi),
- * `staged` HEAD con l'indice, `push` il punto di partenza dall'upstream con HEAD.
+ * What the diff pane compares: `unstaged` the index with the working tree (untracked files included),
+ * `staged` HEAD with the index, `push` the point where the branch left the upstream with HEAD.
  */
 export type DiffKind = 'unstaged' | 'staged' | 'push'
 
-/** Un commit da pushare: hash abbreviato e oggetto. */
+/** An unpushed commit: abbreviated hash and subject. */
 export type DiffCommit = { hash: string; subject: string }
 
-/** Un file cambiato fra i due lati del confronto; un non tracciato ha tutte le righe aggiunte. */
+/** A file changed between the two sides of the comparison; an untracked file has all lines added. */
 export type DiffFile = { path: string; added: number; removed: number; isUntracked: boolean; isBinary: boolean }
 
-/** Una riga di un lato del confronto: numero di riga nel file e testo; `isChanged` la evidenzia. */
+/** A line on one side of the comparison: line number in the file and text; `isChanged` highlights it. */
 export type DiffSide = { number: number; text: string; isChanged: boolean }
 
-/** Una riga del confronto affiancato: un'intestazione di blocco, oppure i due lati (uno può mancare). */
+/** A row of the side-by-side comparison: a hunk header, or the two sides (one can be missing). */
 export type DiffRow = { header: string } | { left: DiffSide | null; right: DiffSide | null }
 
 /**
- * Un blocco cambiato del file intero, come lo appaia git: `[inizio a sinistra, righe a sinistra,
- * inizio a destra, righe a destra]`, con gli inizi contati da 0.
+ * A changed block of the whole file, as git pairs it: `[left start, left lines,
+ * right start, right lines]`, with starts counted from 0.
  */
 export type CompareBlock = [number, number, number, number]
 
 /**
- * Il file intero per il confronto grafico (`hooks/compare.tsx`): le righe di HEAD e della copia di
- * lavoro, i blocchi cambiati, e quanto è stato tagliato per stare nel limite dei `props` di `Client`.
+ * The whole file for the graphical comparison (`hooks/compare.tsx`): the lines of HEAD and of the working
+ * tree, the changed blocks, and how much was cut to fit within the `Client` `props` limit.
  */
 export type ComparePayload = {
   path: string
-  /** Righe di HEAD, tabulazioni espanse; vuoto per un file non tracciato. */
+  /** Lines of HEAD, tabs expanded; empty for an untracked file. */
   left: string[]
-  /** Righe della copia di lavoro; vuoto per un file cancellato. */
+  /** Lines of the working tree; empty for a deleted file. */
   right: string[]
   blocks: CompareBlock[]
-  /** Righe dei due file interi: maggiori di `left.length` e `right.length` se il confronto è tagliato. */
+  /** Lines of the two whole files: greater than `left.length` and `right.length` if the comparison is truncated. */
   leftTotal: number
   rightTotal: number
   isTruncated: boolean
-  /** Righe accorciate perché più lunghe del massimo per riga. */
+  /** Lines shortened because they exceed the per-line maximum. */
   longLines: number
   isUntracked: boolean
-  /** I nomi dei due lati, ad esempio «HEAD» e «Copia di lavoro». */
+  /** The names of the two sides, for example "HEAD" and "Working tree". */
   leftLabel: string
   rightLabel: string
 }
 
-/** L'ultimo giro di rotella sul pannello dei diff, passato al confronto grafico: `seq` lo distingue dal precedente. */
+/** The last wheel turn on the diff pane, passed to the graphical comparison: `seq` tells it apart from the previous one. */
 export type CompareWheel = { seq: number; by: number }
 
-/** I `props` del modulo di superficie `hooks/compare.tsx`. */
-/** `viewRows`: le righe che il pannello assegna al confronto, anche quando la regione ne riporta meno. */
+/** The `props` of the surface module `hooks/compare.tsx`. */
+/** `viewRows`: the rows the pane assigns to the comparison, even when the region reports fewer. */
 export type CompareProps = ComparePayload & { readAt: number; wheel: CompareWheel; viewRows: number }
 
-/** Il confronto mostrato nel pannello dei diff: il lato vecchio a sinistra, il nuovo a destra, come EGit. */
+/** The comparison shown in the diff pane: the old side on the left, the new one on the right, as in EGit. */
 export type RepoDiff = {
   repo: string
   branch: string
   kind: DiffKind
   leftLabel: string
   rightLabel: string
-  /** I commit da pushare, solo per `push`. */
+  /** The unpushed commits, only for `push`. */
   commits: DiffCommit[]
   readAt: number
   files: DiffFile[]
   selected: string | null
   rows: DiffRow[]
   hiddenRows: number
-  /** Il file intero per il confronto grafico su desktop; null per un file binario o senza file scelto. */
+  /** The whole file for the graphical comparison on the desktop; null for a binary file or with no file selected. */
   compare: ComparePayload | null
 }
 

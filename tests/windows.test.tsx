@@ -22,13 +22,13 @@ type Entry = { name: string; kind: 'file' | 'dir' | 'other'; size: number; mtime
 const dir = (name: string): Entry => ({ name, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
 const file = (name: string): Entry => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })
 
-// Due repo sotto `git\`, uno con node_modules (da non leggere), una cartella senza repo
+// Two repos under `git\`, one with node_modules (not to be read), a folder without repos
 const TREE: Record<string, Entry[]> = {
-  [ROOT]: [dir('git'), dir('documenti'), file('note.txt')],
+  [ROOT]: [dir('git'), dir('documents'), file('notes.txt')],
   [`${ROOT}\\git`]: [dir('app'), dir('docs')],
   [`${ROOT}\\git\\app`]: [dir('.git'), dir('src'), dir('node_modules')],
   [`${ROOT}\\git\\docs`]: [file('.git'), file('README.md')],
-  [`${ROOT}\\documenti`]: [file('a.docx')],
+  [`${ROOT}\\documents`]: [file('a.docx')],
 }
 
 type Run = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated: false; isStderrTruncated: false }
@@ -39,7 +39,7 @@ function engine(on: On): { listed: string[]; runs: { argv: string[]; env: unknow
   const listed: string[] = []
   const runs: { argv: string[]; env: unknown }[] = []
   on('fs.list', (_, e) => {
-    // Il kit gira su Linux e antepone la sua cartella a `C:\…`, che lì non è assoluto; su Windows arriva com'è
+    // The kit runs on Linux and prepends its folder to `C:\…`, which is not absolute there; on Windows it arrives as is
     const path = e.path.slice(e.path.indexOf('C:\\'))
     listed.push(path)
     return { value: TREE[path] ?? [] }
@@ -61,7 +61,7 @@ function engine(on: On): { listed: string[]; runs: { argv: string[]; env: unknow
   return { listed, runs }
 }
 
-test('su Windows i repo si trovano leggendo le cartelle, senza find, e i nomi partono dalla cartella comune', async (
+test('on Windows repos are found by reading folders, without find, and names start from the common folder', async (
   $,
   on,
 ) => {
@@ -73,7 +73,7 @@ test('su Windows i repo si trovano leggendo le cartelle, senza find, e i nomi pa
     presentation: { isFullscreen: true, columns: 120 },
   })
   expect(runs.some(run => run.argv[0] === 'find')).toBe(false)
-  // Un repo trovato non si esplora
+  // A found repo is not explored
   expect(listed).not.toContain(`${ROOT}\\git\\app\\src`)
   expect(listed).not.toContain(`${ROOT}\\git\\app\\node_modules`)
   expect(runs.some(run => run.argv.includes(`${ROOT}\\git\\docs`))).toBe(true)
@@ -84,7 +84,7 @@ test('su Windows i repo si trovano leggendo le cartelle, senza find, e i nomi pa
   await list.unmount()
 })
 
-test('su Windows fetch non imposta la connessione SSH condivisa', async ($, on) => {
+test('on Windows fetch does not set up the shared SSH connection', async ($, on) => {
   const { runs } = engine(on)
   await $.command.run({
     command: 'gitree',

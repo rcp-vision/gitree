@@ -24,16 +24,16 @@ const DIFF = {
   plugin: 'gitree',
   component: 'Pane',
   requestId: 'gitree-diff',
-  props: { ...PANE_PROPS, title: 'Confronto demo' },
+  props: { ...PANE_PROPS, title: 'Compare demo' },
 } as const
 
-const PATCH = ['@@ -1,2 +1,2 @@', ' uguale', '-vecchia', '+nuova', ''].join('\n')
+const PATCH = ['@@ -1,2 +1,2 @@', ' same', '-older', '+newer', ''].join('\n')
 
 type Run = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated: false; isStderrTruncated: false }
 
 const ok = (stdout: string): Run => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
-// Un repo `demo` con un file in stage e ancora modificato, un non tracciato e due commit da pushare
+// A `demo` repo with a file staged and modified again, an untracked file and two unpushed commits
 function git(argv: readonly string[], status: string): Run {
   if (argv[0] === 'find') return ok(`${ROOT}/demo/.git\n`)
   if (argv.includes('status')) return ok(status)
@@ -44,7 +44,7 @@ function git(argv: readonly string[], status: string): Run {
     if (argv.includes(BASE)) return ok('3\t0\tbuild.gradle\n')
     return ok('1\t1\tsrc/staged.ts\n')
   }
-  if (argv.includes('ls-files')) return ok('nuovo.txt\n')
+  if (argv.includes('ls-files')) return ok('added.txt\n')
   return ok(PATCH)
 }
 
@@ -53,7 +53,7 @@ const MIXED = [
   '# branch.upstream origin/feature/x',
   '# branch.ab +2 -0',
   '1 MM N... 100644 100644 100644 1111111 2222222 src/staged.ts',
-  '? nuovo.txt',
+  '? added.txt',
   '',
 ].join('\n')
 
@@ -83,18 +83,18 @@ async function press($: Engine, key: string): Promise<void> {
   await list.unmount()
 }
 
-test('con modifiche in stage e fuori, la riga offre Unstaged, Staged e Da pushare', async ($, on) => {
+test('with staged and unstaged changes, the row offers Unstaged, Staged and Unpushed', async ($, on) => {
   engine(on)
   await press($, 'demo:diff')
   const list = await $.ui.mount({ ...LIST, surface: 'desktop' })
-  // Unstaged conta anche il non tracciato, come nella vista Git Staging di EGit
+  // Unstaged also counts the untracked file, as in the EGit Git Staging view
   expect((await list.find({ type: 'Button', key: 'demo:diff' }))?.text).toBe('Unstaged 2')
   expect((await list.find({ type: 'Button', key: 'demo:diff-staged' }))?.text).toBe('Staged 1')
-  expect((await list.find({ type: 'Button', key: 'demo:diff-push' }))?.text).toBe('Da pushare 2')
+  expect((await list.find({ type: 'Button', key: 'demo:diff-push' }))?.text).toBe('Unpushed 2')
   await list.unmount()
 })
 
-test('solo modifiche fuori dallo stage e niente da pushare: resta Unstaged da solo', async ($, on) => {
+test('only unstaged changes and nothing to push: Unstaged stays alone', async ($, on) => {
   const status = ['# branch.head feature/x', '# branch.upstream origin/feature/x', '# branch.ab +0 -0',
     '1 .M N... 100644 100644 100644 1111111 1111111 src/a.ts', ''].join('\n')
   engine(on, status)
@@ -106,24 +106,24 @@ test('solo modifiche fuori dallo stage e niente da pushare: resta Unstaged da so
   await list.unmount()
 })
 
-test('staged confronta HEAD con l\'indice, senza i non tracciati', async ($, on) => {
+test('staged compares HEAD with the index, without untracked files', async ($, on) => {
   const calls = engine(on)
   await press($, 'demo:diff-staged')
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
   expect(await desktop.find({ type: 'Text', text: /^HEAD$/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /^Indice$/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Button', key: 'file:nuovo.txt' })).toBeUndefined()
+  expect(await desktop.find({ type: 'Text', text: /^Index$/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Button', key: 'file:added.txt' })).toBeUndefined()
   expect(calls.some(argv => argv.includes('--cached') && argv.includes('src/staged.ts'))).toBe(true)
   await desktop.unmount()
 })
 
-test('unstaged confronta l\'indice con la copia di lavoro, con i non tracciati', async ($, on) => {
+test('unstaged compares the index with the working tree, with untracked files', async ($, on) => {
   const calls = engine(on)
   await press($, 'demo:diff')
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
-  expect(await desktop.find({ type: 'Text', text: /^Indice$/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Text', text: /^Copia di lavoro$/, in: 'compare' })).toBeDefined()
-  expect(await desktop.find({ type: 'Button', key: 'file:nuovo.txt' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /^Index$/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Text', text: /^Working tree$/, in: 'compare' })).toBeDefined()
+  expect(await desktop.find({ type: 'Button', key: 'file:added.txt' })).toBeDefined()
   const fileDiff = calls.find(argv => argv.includes('-U100000000'))
   expect(fileDiff).toBeDefined()
   expect(fileDiff?.includes('HEAD')).toBe(false)
@@ -131,7 +131,7 @@ test('unstaged confronta l\'indice con la copia di lavoro, con i non tracciati',
   await desktop.unmount()
 })
 
-test('da pushare confronta il punto di partenza dall\'upstream con HEAD ed elenca i commit', async ($, on) => {
+test('unpushed compares the point where the branch left the upstream with HEAD and lists the commits', async ($, on) => {
   const calls = engine(on)
   await press($, 'demo:diff-push')
   const desktop = await $.ui.mount({ ...DIFF, surface: 'desktop' })
