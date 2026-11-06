@@ -1,0 +1,14 @@
+{
+  "name": "rcp-vision",
+  "owner": {
+    "name": "RCP Vision",
+    "email": "info@rcp-vision.com"
+  },
+  "plugins": [
+    {
+      "name": "gitree",
+      "source": "./",
+      "description": "Pannello con repo, branch e stato dei repository git annidati nella cartella della sessione, con fetch, pull, push e confronto grafico delle modifiche in stile EGit"
+    }
+  ]
+}
