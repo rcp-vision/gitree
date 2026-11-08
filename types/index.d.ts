@@ -12,20 +12,57 @@ export type RepoStatus = {
   unstaged: number
   untracked: number
   error: string | null
+  /** For a linked worktree, the name of the repo it belongs to; null for a main checkout. */
+  worktreeOf: string | null
+  /** The full path, only for a worktree outside the session folder: the name alone would not say where it is. */
+  location: string | null
+  /** The other local branches with commits to push, not checked out anywhere; empty for a linked worktree. */
+  others: BranchStatus[]
+  /** Local branches left out of `others` because they have no upstream. */
+  hidden: number
+  /** The linked worktrees of this repo, each with its own status; empty for a worktree. */
+  worktrees: RepoStatus[]
 }
+
+/** A local branch that is not checked out, with commits its upstream does not have. */
+export type BranchStatus = {
+  name: string
+  upstream: string
+  remote: string
+  ahead: number
+  behind: number
+  /** Why `git push <remote> <name>` would not do the right thing: behind its upstream, or tracking another branch. */
+  blocked: string | null
+}
+
+/** A commit of another branch: abbreviated hash, subject and short age ("6w"). */
+export type BranchCommit = { hash: string; subject: string; age: string }
+
+/** The commits to push of the branches the person opened, by `<repo>#<branch>`; `ahead` tells a stale list. */
+export type BranchLogs = Record<string, { ahead: number; commits: BranchCommit[] }>
 
 export type RepoSnapshot = { updatedAt: number | null; repos: RepoStatus[] }
 
 export type RepoAction = 'fetch' | 'pull' | 'push'
 
-/** The git actions running, by repo name: the row shows "running" instead of the buttons. */
+/** The git actions running, by repo name or by `<repo>#<branch>`: the row shows "running" instead of the buttons. */
 export type RepoBusy = Record<string, RepoAction>
 
 /**
- * What the diff pane compares: `unstaged` the index with the working tree (untracked files included),
- * `staged` HEAD with the index, `push` the point where the branch left the upstream with HEAD.
+ * Sections of the list the person opened or closed: by repo name, `<repo>:others` for its other branches,
+ * `<repo>#<branch>` for one of them; `:clean` is the group of clean repos.
  */
-export type DiffKind = 'unstaged' | 'staged' | 'push'
+export type RepoExpanded = Record<string, boolean>
+
+/**
+ * What the diff pane compares: `unstaged` the index with the working tree (untracked files included),
+ * `staged` HEAD with the index, `push` the point where the branch left the upstream with HEAD,
+ * `branch` the same for another branch, `commit` one commit of another branch with its parent.
+ */
+export type DiffKind = 'unstaged' | 'staged' | 'push' | 'branch' | 'commit'
+
+/** For `branch` and `commit`: the other branch, and the commit when only one is compared. */
+export type DiffTarget = { branch: string; commit: string | null }
 
 /** An unpushed commit: abbreviated hash and subject. */
 export type DiffCommit = { hash: string; subject: string }
@@ -80,6 +117,7 @@ export type RepoDiff = {
   repo: string
   branch: string
   kind: DiffKind
+  target: DiffTarget | null
   leftLabel: string
   rightLabel: string
   /** The unpushed commits, only for `push`. */
@@ -98,6 +136,8 @@ declare module 'claude-code' {
     'gitree': {
       snapshot: Shaped<RepoSnapshot>
       busy: Shaped<RepoBusy>
+      expanded: Shaped<RepoExpanded>
+      logs: Shaped<BranchLogs>
       diff: Shaped<RepoDiff | null>
       wheel: Shaped<CompareWheel>
     }

@@ -2,6 +2,51 @@ import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
+// The actions of a row, now links in its open body: "<branch>:menu" names a branch, "<repo>:repo:menu" a repo.
+// A closed branch is opened to read them and closed again
+type Shown = { key: string | undefined; text: string; props: Record<string, unknown> }
+type Mounted = {
+  press: (target: { key: string }) => Promise<unknown>
+  findAll: (query: { type: string }) => Promise<Shown[]>
+}
+const BRANCH_ACTIONS = ['diff', 'diff-staged', 'diff-push', 'compare', 'push', 'pull']
+const ACTION_LABELS: Record<string, string> = {
+  diff: 'Compare unstaged',
+  'diff-staged': 'Compare staged',
+  'diff-push': 'Compare commits',
+  compare: 'Compare commits',
+  push: 'Push',
+  pull: 'Pull',
+  fetch: 'Fetch',
+}
+// What an action shows: its Button draws only blanks over the blue text, so it is named by its key
+const labelOf = (button: Shown) => ACTION_LABELS[button.key?.split(':').pop() ?? ''] ?? button.text
+function actionsOf(buttons: Shown[], key: string): Shown[] {
+  const id = key.replace(/:menu$/, '')
+  const repo = id.endsWith(':repo') ? id.slice(0, -':repo'.length) : null
+  const suffixes = repo !== null ? ['fetch'] : BRANCH_ACTIONS
+  const owner = repo ?? id
+  return buttons.filter(button => suffixes.some(suffix => button.key === `${owner}:${suffix}`))
+}
+async function read(list: Mounted, key: string): Promise<{ actions: Shown[]; opened: boolean }> {
+  let actions = actionsOf(await list.findAll({ type: 'Button' }), key)
+  if (actions.length > 0 || key.endsWith(':repo:menu')) return { actions, opened: false }
+  await list.press({ key: `${key.replace(/:menu$/, '')}:branch` })
+  actions = actionsOf(await list.findAll({ type: 'Button' }), key)
+  return { actions, opened: true }
+}
+async function offered(list: Mounted, key: string): Promise<string[]> {
+  const { actions, opened } = await read(list, key)
+  if (opened) await list.press({ key: `${key.replace(/:menu$/, '')}:branch` })
+  return actions.map(labelOf)
+}
+async function pick(list: Mounted, key: string, label: string): Promise<void> {
+  const { actions } = await read(list, key)
+  const action = actions.find(button => labelOf(button) === label)
+  if (action?.key === undefined) throw new Error(`no action ${label} for ${key}`)
+  await list.press({ key: action.key })
+}
+
 const ROOT = '/home/dev/projects'
 
 const PANE_PROPS = {
@@ -107,7 +152,9 @@ async function openDiff($: Engine): Promise<void> {
     presentation: { isFullscreen: true, columns: 120 },
   })
   const list = await $.ui.mount({ ...LIST, surface: 'desktop' })
-  await list.press({ key: 'demo:diff' })
+  // Sections start closed: open the repo before pressing what is inside it
+  await list.press({ key: 'demo:toggle' })
+  await pick(list, 'demo:menu', 'Compare unstaged')
   await list.unmount()
 }
 
