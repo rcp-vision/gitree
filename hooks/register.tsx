@@ -871,26 +871,6 @@ function isInProgress(repo: RepoStatus): boolean {
   )
 }
 
-// The status is always spelled out: color reinforces it, it does not replace it
-function describe(repo: RepoStatus): string {
-  if (repo.error !== null) {
-    return `error: ${repo.error}`
-  }
-  // Unstaged, Staged and Unpushed are the links next to it: only what has no comparison stays here
-  const parts: string[] = []
-  if (repo.upstream === null) parts.push(repo.ahead > 0 ? `no upstream, ${repo.ahead} local commits` : 'no upstream')
-  if (repo.behind > 0) parts.push(`${repo.behind} to pull`)
-  if (parts.length > 0) return parts.join(', ')
-  return repo.changed + repo.untracked + repo.ahead > 0 ? '' : 'clean'
-}
-
-function color(repo: RepoStatus): 'error' | 'warning' | 'suggestion' | 'success' {
-  if (repo.error !== null) return 'error'
-  if (repo.changed > 0 || repo.untracked > 0) return 'warning'
-  if (repo.ahead > 0 || repo.behind > 0 || repo.upstream === null) return 'suggestion'
-  return 'success'
-}
-
 // "of the working tree", "of the index", "of HEAD", "of origin/develop"
 function ofSide(label: string): string {
   if (label === 'Working tree') return 'of the working tree'
@@ -1327,7 +1307,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = table
     const shown = await read($, diff)
     if (shown === null) {
-      return <Text dimColor>Choose Unstaged, Staged or Unpushed in the Repositories pane.</Text>
+      return <Text dimColor>Choose a comparison in the Repositories pane.</Text>
     }
     const { repos } = await read($, snapshot)
     const repo = findCheckout(repos, shown.repo)
