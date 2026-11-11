@@ -19,6 +19,8 @@ import type {
   RepoExpanded,
   RepoStatus,
 } from '../types'
+import { EMPTY_TREE, HISTORY_PANE, historyPane, openHistory } from './history'
+import type { HistoryDeps } from './history'
 
 const PANE = 'gitree'
 const DIFF_PANE = 'gitree-diff'
@@ -711,8 +713,13 @@ async function diffPlan(
 ): Promise<{ sides: DiffSides; labels: [string, string]; commits: DiffCommit[] }> {
   if (kind === 'commit') {
     if (target?.commit == null) throw new Error('no commit to compare')
-    const parent = `${target.commit}^`
-    return { sides: { revs: [parent, target.commit], withUntracked: false }, labels: [parent, target.commit], commits: [] }
+    // A commit without parents is compared with the empty tree: all its files are added
+    const first = `${target.commit}^`
+    const hasParent =
+      (await $.process.run(['git', '-C', repo.path, 'rev-parse', '--verify', '-q', first], { timeoutMs: 15_000 })).exitCode === 0
+    const parent = hasParent ? first : EMPTY_TREE
+    const leftLabel = hasParent ? first : 'Empty'
+    return { sides: { revs: [parent, target.commit], withUntracked: false }, labels: [leftLabel, target.commit], commits: [] }
   }
   if (kind === 'branch') {
     const branch = repo.others.find(one => one.name === target?.branch)
@@ -884,7 +891,19 @@ function clockTime(epochMs: number): string {
   return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`
 }
 
+// What the History pane needs from this module: the repos read here, the changed files, the Compare pane
+function historyDeps($: EngineInterface): HistoryDeps {
+  return {
+    findRepo: async name => findCheckout((await read($, snapshot)).repos, name),
+    changedFiles: (path, revs) => changedFiles($, path, { revs, withUntracked: false }),
+    openCommitDiff: (repo, commit, file) =>
+      startShowDiff($, repo, 'commit', file, { branch: commit.refs[0]?.name ?? repo.branch, commit: commit.short }),
+  }
+}
+
 export const register: Register = on => {
+  on('ui.render', { component: 'Pane', requestId: HISTORY_PANE }, async ($, e) => historyPane($, e, historyDeps($)))
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gitree',
@@ -1214,7 +1233,14 @@ export const register: Register = on => {
     // a card with one list of branches, a gap between the checked out and the others
     const section = (repo: RepoStatus) => {
       const isOpen = opened[repo.name] ?? false
-      const items: Item[] = [{ key: `${repo.name}:fetch`, label: 'Fetch', run: () => startAction($, repo, 'fetch') }]
+      const items: Item[] = [
+        { key: `${repo.name}:fetch`, label: 'Fetch', run: () => startAction($, repo, 'fetch') },
+        {
+          key: `${repo.name}:history`,
+          label: 'History',
+          run: () => void openHistory($, historyDeps($), repo).catch(error => $.ui.toast(`${repo.name}: history not read, ${String(error)}`)),
+        },
+      ]
       return (
         <Box
           key={`${repo.name}:section`}

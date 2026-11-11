@@ -25,9 +25,31 @@ that apply now:
   behind its upstream, or that tracks a branch with another name, says why it cannot be pushed.
 - **Pull** pulls with fast-forward only, for a branch checked out in a folder.
 - **Fetch**, next to the current branch, fetches the repository: one fetch brings all its remote branches.
+- **History**, next to **Fetch**, opens the history of the repository.
 
 The commits of a branch that is not checked out are read when it opens; each one opens its own comparison. **Fetch all**
 fetches every repository once, worktrees included. A legend under the list explains the counters.
+
+## History
+
+The **History** pane shows the commits of a repository in the style of the EGit History view:
+
+- A table with **Id**, **Message**, **Author**, and **Authored Date**. When the pane is wide enough, it also shows
+  **Committer** and **Committed Date**.
+- The commit graph at the start of **Message**: one colored lane for each line of descent, a dot on each commit, and the
+  lines where branches split and merge.
+- The refs on each commit, as labels: green for a local branch, grey-blue for a remote branch, yellow for a tag. The
+  current branch is in bold.
+- **All branches** follows every local branch, remote branch, and tag. **Current branch** follows `HEAD` alone.
+- 50 commits per page, with **◂ Newer** and **Older ▸**.
+
+Under the table the pane shows the selected commit: id, author, committer, parents and children, refs, and the whole
+message. Next to it is the list of the files that the commit changed against its first parent. A file opens its
+comparison in the **Compare** pane. A click on a row selects its commit.
+
+On the terminal the graph is drawn with characters.
+
+## Comparison
 
 On the desktop the comparison is graphical, in the style of the EGit Compare Editor: two sides next to each other,
 connectors between the changed blocks, and scroll bars. On the terminal the comparison shows the changed lines with
@@ -57,8 +79,14 @@ The pane opens at the start of every session. If you close it, reopen it with `/
 
 ## Development
 
-The code is in `hooks/register.tsx` (panes and commands) and `hooks/compare.tsx` (graphical comparison on the
-desktop). The state types are in `types/index.d.ts`.
+The code is in these files:
+
+- `hooks/register.tsx`: the Repositories and Compare panes, and the commands.
+- `hooks/compare.tsx`: the graphical comparison on the desktop.
+- `hooks/history.tsx`: the History pane.
+- `hooks/graph.ts`: the lanes of the commit graph and their drawing.
+
+The state types are in `types/index.d.ts`.
 
 If you want to try a change, start Claude Code with the plugin folder:
 

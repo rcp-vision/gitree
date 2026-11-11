@@ -131,6 +131,54 @@ export type RepoDiff = {
   compare: ComparePayload | null
 }
 
+/** A segment of a graph row: from lane, to lane, color index. */
+export type GraphEdge = [number, number, number]
+
+/**
+ * One row of the commit graph: the commit's lane and color, the segments from the row's top edge to the dot (`top`)
+ * and from the dot to the bottom edge (`bottom`), and how many lanes the row spans.
+ */
+export type GraphRow = { lane: number; color: number; top: GraphEdge[]; bottom: GraphEdge[]; width: number; isMerge: boolean }
+
+/** A ref on a commit, as EGit labels it: a local branch, a remote branch, a tag, or a detached HEAD. */
+export type HistoryRef = { name: string; kind: 'head' | 'remote' | 'tag' | 'detached'; isCurrent: boolean }
+
+/** A commit of the History pane, with its graph row. Dates are epoch milliseconds. */
+export type HistoryCommit = {
+  hash: string
+  short: string
+  parents: string[]
+  subject: string
+  author: string
+  authorEmail: string
+  authoredAt: number
+  committer: string
+  committerEmail: string
+  committedAt: number
+  refs: HistoryRef[]
+  graph: GraphRow
+}
+
+/** The commit selected in the History pane: its whole message and the files changed against its first parent. */
+export type HistoryDetail = { hash: string; body: string; files: DiffFile[] }
+
+/** Which refs the History pane follows: every branch and tag, or HEAD alone. */
+export type HistoryScope = 'all' | 'head'
+
+/** The History pane: one page of commits of one repository, newest first, and the commit selected. */
+export type RepoHistory = {
+  repo: string
+  scope: HistoryScope
+  /** Index of the first commit of the page in the whole log. */
+  start: number
+  commits: HistoryCommit[]
+  /** The log goes on after this page. */
+  hasMore: boolean
+  readAt: number
+  selected: string | null
+  detail: HistoryDetail | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'gitree': {
@@ -140,6 +188,7 @@ declare module 'claude-code' {
       logs: Shaped<BranchLogs>
       diff: Shaped<RepoDiff | null>
       wheel: Shaped<CompareWheel>
+      history: Shaped<RepoHistory | null>
     }
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "gitree",
-  "version": "0.5.0",
-  "description": "Pane with repo, branch and status of the git repositories nested in the session folder, with fetch, pull, push and an EGit-style graphical diff",
+  "version": "0.6.0",
+  "description": "Pane with repo, branch and status of the git repositories nested in the session folder, with fetch, pull, push, an EGit-style history graph and graphical diff",
   "author": {
     "name": "RCP Vision",
     "email": "info@rcp-vision.com",
